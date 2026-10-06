@@ -1,4 +1,5 @@
 import type { Cardinal8, PropertyVastu } from "./types";
+import type { StoredOrientation } from "./orientation";
 
 export type HomeType = "single_family" | "townhouse" | "condo" | "new_construction_plan";
 export type GarageType = "side_entry" | "front_entry" | "detached" | "none";
@@ -62,6 +63,9 @@ export type Property = {
   floorPlanDataUrl?: string | null;
   /** When a manual entry was created (ms epoch). */
   createdAt?: number;
+  /** Full orientation record (evidence, bearings, activity) — separate from the
+   *  coarse vastu.facingDirection/entranceDirection used by the engine. */
+  orientation?: StoredOrientation;
 };
 
 /** Compact summary for feed cards / comparison rows. */

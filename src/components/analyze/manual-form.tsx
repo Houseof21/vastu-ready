@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, Upload, Compass, Info, X } from "lucide-react";
+import { Check, Upload, Info, X } from "lucide-react";
 import { Card, CardBody, Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { useUserState, useHydrated } from "@/components/providers/user-state";
@@ -23,10 +23,12 @@ import type {
 import { CARDINALS } from "@/domain/types";
 import { DIRECTION_LABEL, zoneLabel } from "@/domain/directions";
 import { HOME_TYPE_LABEL, GARAGE_TYPE_LABEL, PRIVACY_LABEL } from "@/domain/labels";
+import { OrientationStudio, type OrientationResult } from "@/components/orientation/orientation-studio";
+import type { StoredOrientation } from "@/domain/orientation";
 import { cn } from "@/lib/cn";
 
 const ZONES: Zone[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "CENTER"];
-const STEPS = ["Home details", "Orientation", "Floor plan", "Rooms & lot", "Review"] as const;
+const STEPS = ["Home details", "Floor plan", "Orientation", "Rooms & lot", "Review"] as const;
 
 // Draft uses "" to mean Unknown for every optional field (never inferred).
 type Draft = {
@@ -38,6 +40,7 @@ type Draft = {
   garageSpaces: string; garageType: GarageType; privacy: PrivacyLevel;
   listingUrl: string; driveMinutes: string;
   northConfirmed: boolean;
+  orientation: OrientationResult | null;
   facing: Cardinal8 | ""; entrance: Cardinal8 | "";
   lotShape: LotShape | ""; roadPosition: RoadPosition | ""; openSpaceNE: Quality | "";
   kitchen: Zone | ""; primaryBedroom: Zone | ""; staircase: Zone | ""; garageZone: Zone | "";
@@ -53,7 +56,7 @@ const EMPTY_DRAFT: Draft = {
   homeType: "single_family", style: "", newConstruction: false, pool: false,
   garageSpaces: "", garageType: "none", privacy: "moderate",
   listingUrl: "", driveMinutes: "",
-  northConfirmed: false, facing: "", entrance: "",
+  northConfirmed: false, orientation: null, facing: "", entrance: "",
   lotShape: "", roadPosition: "", openSpaceNE: "",
   kitchen: "", primaryBedroom: "", staircase: "", garageZone: "",
   bathrooms: [], bathroomsUnknown: true,
@@ -77,6 +80,7 @@ function draftFromProperty(p: Property): Draft {
     garageSpaces: String(p.garageSpaces || ""), garageType: p.garageType, privacy: p.privacy,
     listingUrl: p.listingUrl ?? "", driveMinutes: p.driveMinutes != null ? String(p.driveMinutes) : "",
     northConfirmed: v.facingDirection.confidence >= 0.8 || v.entranceDirection.confidence >= 0.8,
+    orientation: null,
     facing: val(v.facingDirection) as Cardinal8 | "",
     entrance: val(v.entranceDirection) as Cardinal8 | "",
     lotShape: val(v.lotShape) as LotShape | "",
@@ -170,6 +174,7 @@ function Wizard({ initial, editing }: { initial: Draft; editing: boolean }) {
       driveMinutes: d.driveMinutes ? num(d.driveMinutes) : null,
       floorPlanDataUrl: d.floorPlanDataUrl,
       vastu,
+      orientation: buildOrientation(d),
     };
 
     const property = await getPropertyProvider().fromManualEntry(input);
@@ -184,8 +189,8 @@ function Wizard({ initial, editing }: { initial: Draft; editing: boolean }) {
 
       <div className="mt-6">
         {step === 0 && <StepBasics d={d} set={set} errors={stepErrors} />}
-        {step === 1 && <StepOrientation d={d} set={set} />}
-        {step === 2 && <StepFloorPlan d={d} onFile={onFile} />}
+        {step === 1 && <StepFloorPlan d={d} onFile={onFile} />}
+        {step === 2 && <StepOrientation d={d} set={set} />}
         {step === 3 && <StepRooms d={d} set={set} />}
         {step === 4 && <StepReview d={d} />}
       </div>
@@ -259,47 +264,30 @@ function StepBasics({ d, set, errors }: { d: Draft; set: (p: Partial<Draft>) => 
 }
 
 function StepOrientation({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) {
+  function onConfirm(r: OrientationResult) {
+    set({
+      orientation: r,
+      entrance: (r.entranceFacing.cardinal ?? "") as Cardinal8 | "",
+      facing: (r.buildingFrontage ?? "") as Cardinal8 | "",
+      northConfirmed: r.entranceFacing.confirmed,
+    });
+  }
   return (
     <Card>
-      <CardBody className="space-y-5">
+      <CardBody className="space-y-4">
         <h2 className="font-display text-xl font-semibold text-ink">Orientation</h2>
-        <div className="flex items-start gap-2.5 rounded-lg border border-[color:var(--color-info-soft)] bg-info-soft/50 p-3 text-sm text-ink-2">
-          <Compass size={16} className="mt-0.5 shrink-0 text-info" aria-hidden />
-          <div>
-            <p className="font-medium text-ink">Confirm which way is North first.</p>
-            <p className="mt-1">
-              Orientation is only meaningful once you know North. Use a compass app standing at the front
-              door, or check the plat/listing map. Then set the directions below.
-            </p>
-            <label className="mt-2 flex items-center gap-2 font-medium text-ink">
-              <input
-                type="checkbox"
-                checked={d.northConfirmed}
-                onChange={(e) => set({ northConfirmed: e.target.checked })}
-                className="h-4 w-4 accent-[color:var(--color-forest)]"
-              />
-              I&apos;ve confirmed which direction is North.
-            </label>
-            {!d.northConfirmed ? (
-              <p className="mt-1 text-xs text-caution">
-                Until confirmed, orientation is treated as &ldquo;needs verification&rdquo; rather than confirmed.
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <DirSelect
-          label="Building facing direction"
-          help="The direction the front of the home points toward."
-          v={d.facing}
-          set={(x) => set({ facing: x })}
-        />
-        <DirSelect
-          label="Entrance direction"
-          help="The direction you face when standing inside, looking out through the main entrance. This can differ from the way the building faces."
-          v={d.entrance}
-          set={(x) => set({ entrance: x })}
-        />
+        <p className="text-sm text-ink-2">
+          Entrance-facing is the direction you face standing <span className="font-medium text-ink">inside</span> at
+          the main entrance, looking <span className="font-medium text-ink">out</span>. Set North, drag the arrow
+          from the door outward, then confirm. Automated reading of plans/plats/aerials isn&apos;t configured yet —
+          this is the manual workflow, and nothing is marked confirmed until you confirm it.
+        </p>
+        <OrientationStudio imageUrl={d.floorPlanDataUrl} onConfirm={onConfirm} />
+        {d.orientation?.entranceFacing.confirmed ? (
+          <p className="rounded-md border border-[color:var(--color-strong-soft)] bg-strong-soft/50 p-2.5 text-sm text-strong">
+            Confirmed: entrance faces {d.orientation.entranceFacing.cardinal} ({Math.round(d.orientation.entranceFacing.bearingDeg ?? 0)}°).
+          </p>
+        ) : null}
       </CardBody>
     </Card>
   );
@@ -524,6 +512,33 @@ function num(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Build the stored orientation record (separate direction concepts + evidence + activity). */
+function buildOrientation(d: Draft): StoredOrientation | undefined {
+  const r = d.orientation;
+  if (!r) return undefined;
+  return {
+    entranceFacing: r.entranceFacing,
+    entranceLocationZone: r.entranceLocationZone,
+    buildingFrontage: r.buildingFrontage,
+    streetDirection: null,
+    northType: r.northType,
+    planNorthDeg: r.planNorthDeg,
+    needsConfirmation: r.needsConfirmation,
+    evidence: d.floorPlanDataUrl
+      ? [{ id: "fp", kind: "floor_plan", name: d.floorPlanName || "Floor plan", dataUrl: d.floorPlanDataUrl, footprint: "actual" }]
+      : [],
+    activity: [
+      {
+        at: Date.now(),
+        by: "buyer",
+        action: r.entranceFacing.confirmed
+          ? `Confirmed entrance-facing ${r.entranceFacing.cardinal ?? "unknown"} (${Math.round(r.entranceFacing.bearingDeg ?? 0)}°)`
+          : "Saved an unconfirmed orientation estimate",
+      },
+    ],
+  };
+}
+
 // ---- Primitives -------------------------------------------------------------
 
 function Stepper({ step }: { step: number }) {
@@ -577,21 +592,6 @@ function Sel({ label, v, opts, set }: { label: string; v: string; opts: Record<s
         ))}
       </select>
     </label>
-  );
-}
-
-function DirSelect({ label, help, v, set }: { label: string; help: string; v: Cardinal8 | ""; set: (x: Cardinal8 | "") => void }) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-ink">{label}</p>
-      <p className="mt-0.5 text-xs text-muted">{help}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <ChipBtn active={v === ""} onClick={() => set("")}>Unknown</ChipBtn>
-        {CARDINALS.map((dir) => (
-          <ChipBtn key={dir} active={v === dir} onClick={() => set(dir)}>{DIRECTION_LABEL[dir]}</ChipBtn>
-        ))}
-      </div>
-    </div>
   );
 }
 

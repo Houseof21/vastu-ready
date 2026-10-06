@@ -58,6 +58,7 @@ export type ManualPropertyInput = {
   driveMinutes?: number | null;
   floorPlanDataUrl?: string | null;
   vastu: PropertyVastu;
+  orientation?: import("@/domain/orientation").StoredOrientation;
 };
 
 export interface PropertyDataProvider {
@@ -200,6 +201,7 @@ export const MockPropertyProvider: PropertyDataProvider = {
       floorPlanDataUrl: input.floorPlanDataUrl ?? null,
       createdAt: Date.now(),
       comps: [],
+      orientation: input.orientation,
     };
   },
 };

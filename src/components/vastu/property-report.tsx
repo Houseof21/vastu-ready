@@ -17,6 +17,7 @@ import { FeedbackButtons } from "./feedback-buttons";
 import { SaveButton, CompareButton } from "./actions";
 import { PropertyImage } from "./property-image";
 import { FictionalBanner, ManualEntryBanner } from "./disclosure-banner";
+import { OrientationSummary } from "@/components/orientation/orientation-summary";
 import { useUserState } from "@/components/providers/user-state";
 import { formatUsd, formatSqft, formatAcres, formatBaths, formatDriveTime } from "@/lib/format";
 import { DEALBREAKER_LABEL } from "@/domain/profile";
@@ -212,6 +213,14 @@ export function PropertyReport({
               </div>
             </CardBody>
           </Card>
+
+          {p.orientation ? (
+            <Card>
+              <CardBody>
+                <OrientationSummary orientation={p.orientation} />
+              </CardBody>
+            </Card>
+          ) : null}
 
           <Card>
             <CardBody>
