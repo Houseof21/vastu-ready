@@ -1,4 +1,5 @@
 import type { Pt, Ring } from "./geometry";
+import { nearestOnPaths } from "./geometry";
 
 /**
  * Server-side GIS client. Pulls a parcel, its building footprint, and nearby
@@ -86,28 +87,19 @@ export type ParcelRecord = {
   assessedValue: number | null;
   typeUse: string | null;
   ring: Ring; // outer ring, wkid 102719
+  /** True when the geocoded point missed every parcel and we snapped to the nearest. */
+  approxMatch: boolean;
 };
+
+const PARCEL_FIELDS =
+  "OBJECTID,SITE_ADDRESS,CITY_DECODE,ZIPNUM,DEED_ACRES,YEAR_BUILT,HEATEDAREA,TOTAL_VALUE_ASSD,TYPE_USE_DECODE";
 
 function toRing(rings: number[][][] | undefined): Ring {
   const outer = rings?.[0] ?? [];
   return outer.map((p) => [p[0]!, p[1]!] as Pt);
 }
 
-/** The parcel containing a lon/lat point (WGS84), returned in NC State Plane feet. */
-export async function parcelAtPoint(lng: number, lat: number): Promise<ParcelRecord | null> {
-  const j = await getJson<{ features?: EsriFeature[] }>(PARCELS, {
-    geometry: `${lng},${lat}`,
-    geometryType: "esriGeometryPoint",
-    inSR: "4326",
-    spatialRel: "esriSpatialRelIntersects",
-    outFields:
-      "SITE_ADDRESS,CITY_DECODE,ZIPNUM,DEED_ACRES,YEAR_BUILT,HEATEDAREA,TOTAL_VALUE_ASSD,TYPE_USE_DECODE",
-    returnGeometry: "true",
-    outSR: String(WAKE_SR),
-    f: "json",
-  });
-  const f = j?.features?.[0];
-  if (!f) return null;
+function toRecord(f: EsriFeature, approxMatch: boolean): ParcelRecord {
   const a = f.attributes ?? {};
   const str = (k: string) => (a[k] == null ? null : String(a[k]));
   const num = (k: string) => (typeof a[k] === "number" ? (a[k] as number) : a[k] == null ? null : Number(a[k]));
@@ -121,7 +113,67 @@ export async function parcelAtPoint(lng: number, lat: number): Promise<ParcelRec
     assessedValue: num("TOTAL_VALUE_ASSD"),
     typeUse: str("TYPE_USE_DECODE"),
     ring: toRing(f.geometry?.rings),
+    approxMatch,
   };
+}
+
+async function parcelQuery(params: Record<string, string>): Promise<EsriFeature[]> {
+  const j = await getJson<{ features?: EsriFeature[] }>(PARCELS, {
+    outFields: PARCEL_FIELDS,
+    returnGeometry: "true",
+    f: "json",
+    ...params,
+  });
+  return j?.features ?? [];
+}
+
+/**
+ * The parcel at a lon/lat point (WGS84), returned in NC State Plane feet.
+ * Street-interpolated geocodes can land just off the lot (in the road), so if the
+ * exact point hits no parcel we snap to the nearest parcel within ~90 ft.
+ */
+export async function parcelAtPoint(lng: number, lat: number): Promise<ParcelRecord | null> {
+  // 1) Exact: the parcel that actually contains the point.
+  const exact = await parcelQuery({
+    geometry: `${lng},${lat}`,
+    geometryType: "esriGeometryPoint",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outSR: String(WAKE_SR),
+  });
+  if (exact.length) return toRecord(exact[0]!, false);
+
+  // 2) Fallback: nearest parcel within a small buffer. Fetch candidates in 4326
+  //    so we can rank by distance to the geocoded point, then refetch the winner
+  //    in State Plane feet for the geometry math.
+  const candidates = await parcelQuery({
+    geometry: `${lng},${lat}`,
+    geometryType: "esriGeometryPoint",
+    inSR: "4326",
+    distance: "90",
+    units: "esriSRUnit_Foot",
+    spatialRel: "esriSpatialRelIntersects",
+    outSR: "4326",
+    resultRecordCount: "12",
+  });
+  if (!candidates.length) return null;
+
+  let bestOid: number | null = null;
+  let bestDist = Infinity;
+  for (const f of candidates) {
+    const ring = toRing(f.geometry?.rings);
+    if (ring.length < 3) continue;
+    const near = nearestOnPaths([lng, lat], [ring]);
+    const oid = typeof f.attributes?.OBJECTID === "number" ? (f.attributes.OBJECTID as number) : null;
+    if (near && oid != null && near.distance < bestDist) {
+      bestDist = near.distance;
+      bestOid = oid;
+    }
+  }
+  if (bestOid == null) return null;
+
+  const winner = await parcelQuery({ where: `OBJECTID=${bestOid}`, outSR: String(WAKE_SR) });
+  return winner.length ? toRecord(winner[0]!, true) : null;
 }
 
 /** The largest building footprint intersecting a parcel polygon (the main house). */

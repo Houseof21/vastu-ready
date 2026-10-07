@@ -220,7 +220,11 @@ export async function deriveOrientationFromAddress(address: string): Promise<Gis
   return {
     ok: true,
     stage: "complete",
-    message: "Exterior orientation derived from county GIS. Entrance-facing is an estimate — confirm per home.",
+    message:
+      "Exterior orientation derived from county GIS. Entrance-facing is an estimate — confirm per home." +
+      (parcel.approxMatch
+        ? " (The geocode landed just off the lot, so we snapped to the nearest parcel — verify it's the right home.)"
+        : ""),
     matchedAddress: geo.matchedAddress,
     coords: { lng: geo.lng, lat: geo.lat },
     parcel: parcelOut,
