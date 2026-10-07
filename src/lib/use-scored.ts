@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { DEMO_PROPERTIES, DEMO_PREFERENCES } from "@/data/demo";
+import { DEMO_PREFERENCES } from "@/data/demo";
 import { analyzeProperty, type PropertyAnalysis } from "@/domain/scoring";
 import type { Property } from "@/domain/property";
 import type { UserPreferences } from "@/domain/profile";
 import { useUserState } from "@/components/providers/user-state";
+import { useCatalog } from "@/components/providers/catalog";
 import { DEMO_ANALYZED_AT } from "@/lib/demo-analysis";
 
 export type Scored = { property: Property; analysis: PropertyAnalysis };
@@ -21,10 +22,11 @@ export function useHasCustomPreferences(): boolean {
   return preferences != null;
 }
 
-/** Demo catalog + the buyer's manually-entered homes. */
+/** The server-resolved catalog (real listings or demo) + the buyer's own homes. */
 export function useAllProperties(): Property[] {
   const { properties } = useUserState();
-  return React.useMemo(() => [...Object.values(properties), ...DEMO_PROPERTIES], [properties]);
+  const { catalog } = useCatalog();
+  return React.useMemo(() => [...Object.values(properties), ...catalog], [properties, catalog]);
 }
 
 function analyzedAt(p: Property): string {

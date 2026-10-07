@@ -56,7 +56,7 @@ export type Property = {
   listingUrl: string | null;
   vastu: PropertyVastu;
   isDemo: boolean;
-  source: "mock" | "manual" | "url";
+  source: "mock" | "manual" | "url" | "rentcast";
   /** Comparable sales backing `estimatedValue` (empty for manual entries). */
   comps?: Comp[];
   /** Optional floor-plan the buyer uploaded (data URL), for manual entries. */

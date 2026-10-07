@@ -69,6 +69,20 @@ and runs with zero credentials.
   scraper**: `fromListingUrl` is an honest stub that explains a licensed MLS/data
   feed is required and hands off to manual entry, so nothing about a real home is
   ever fabricated.
+  - `RentcastPropertyProvider` (`providers/rentcast.ts`) plugs in behind the same
+    interface when `RENTCAST_API_KEY` is set: it pulls **real** active for-sale
+    listings for the configured market (`RENTCAST_MARKET_CITY/STATE`) from
+    RentCast's licensed API — a stopgap until MLS access is in place. Factual
+    fields (price, beds/baths, size, lot, year) are real; **Vastu is never
+    fabricated** — no listing feed carries a home's true orientation or room
+    placement, so every Vastu attribute stays `unknown` (confidence 0) and reads
+    "needs verification" until confirmed per home. `estimatedValue` is the list
+    price, a disclosed stand-in rather than an independent AVM. Results are cached
+    in memory (TTL `RENTCAST_CACHE_HOURS`) so a whole feed costs one request,
+    respecting the free tier (~50/month). On any error it falls back to the demo
+    set, and the UI shows the correct disclosure (real listings vs. sample data).
+    The catalog is resolved server-side in `(app)/layout.tsx` and handed to the
+    client feed via `CatalogProvider`.
 - `MapsProvider` — drive time; mock uses a deterministic haversine estimate.
 - `AIProvider` — recommendation + comparison; mock is grounded + deterministic.
 

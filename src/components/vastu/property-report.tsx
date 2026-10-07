@@ -16,7 +16,7 @@ import { CompsTable } from "./comps-table";
 import { FeedbackButtons } from "./feedback-buttons";
 import { SaveButton, CompareButton } from "./actions";
 import { PropertyImage } from "./property-image";
-import { FictionalBanner, ManualEntryBanner } from "./disclosure-banner";
+import { FictionalBanner, ManualEntryBanner, RealListingBanner } from "./disclosure-banner";
 import { OrientationSummary } from "@/components/orientation/orientation-summary";
 import { useUserState } from "@/components/providers/user-state";
 import { formatUsd, formatSqft, formatAcres, formatBaths, formatDriveTime } from "@/lib/format";
@@ -55,6 +55,7 @@ export function PropertyReport({
   return (
     <div className="space-y-8">
       {p.isDemo ? <FictionalBanner /> : null}
+      {p.source === "rentcast" ? <RealListingBanner /> : null}
       {isManual ? <ManualEntryBanner /> : null}
 
       {/* Hero */}

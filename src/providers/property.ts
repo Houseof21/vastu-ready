@@ -12,6 +12,7 @@ import type {
 } from "@/domain/types";
 import { DEMO_PROPERTIES, getDemoProperty } from "@/data/demo";
 import { getMapsProvider } from "./maps";
+import { RentcastPropertyProvider, isRentcastConfigured } from "./rentcast";
 
 /**
  * Property data abstraction. The app never depends on a scraper: this interface
@@ -208,5 +209,9 @@ export const MockPropertyProvider: PropertyDataProvider = {
 
 export function getPropertyProvider(): PropertyDataProvider {
   // MLS/RESO/data-provider adapters branch on env here; mock otherwise.
+  // RentCast provides real, licensed listing facts when a key is configured.
+  if (isRentcastConfigured()) {
+    return RentcastPropertyProvider;
+  }
   return MockPropertyProvider;
 }
