@@ -95,7 +95,7 @@ export function magneticToTrue(magneticBearing: number, declinationDeg: number):
   return normDeg(magneticBearing + declinationDeg);
 }
 
-export type OrientationSource = "manual" | "ai" | "inference" | "unknown";
+export type OrientationSource = "manual" | "ai" | "inference" | "gis" | "unknown";
 
 /**
  * A resolved orientation estimate. `confirmed` is true ONLY when a person
