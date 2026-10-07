@@ -3,17 +3,26 @@
 import * as React from "react";
 import type { Property } from "@/domain/property";
 import type { UserPreferences } from "@/domain/profile";
+import type { RealtorProfile, MlsConnection } from "@/domain/realtor";
+import type { SavedSearch } from "@/domain/search";
+import type { Workspace } from "@/domain/workspace";
 
 /**
- * Client-side user state for the credential-free demo: saved homes, per-home
- * feedback, the compare tray, the buyer's editable preferences, and any
- * manually-entered properties + their persisted reports. Backed by a tiny
- * external store (shared across every component) and persisted to localStorage.
- * This is the seam that Supabase-backed persistence replaces in production
- * (same shape, server-synced).
+ * Client-side user state for the credential-free demo: role, saved homes,
+ * feedback, compare tray, editable preferences, manually-entered properties,
+ * the realtor profile, MLS connection metadata, saved searches, and shared
+ * client–realtor workspaces. Backed by a tiny external store and persisted to
+ * localStorage. This is the seam Supabase-backed persistence replaces (same
+ * shape, server-synced).
+ *
+ * SECURITY: no secrets are ever kept here. MLS connections store only non-secret
+ * metadata (state, scope, hasServerCredentials, demo flag); credentials live
+ * server-side only. Workspaces keep realtor private notes, which the client-facing
+ * views read exclusively through `clientView()` so they are never shown to clients.
  */
 
 export type Feedback = "love" | "consider" | "pass" | "dealbreaker";
+export type Role = "buyer" | "realtor" | null;
 
 type State = {
   saved: string[];
@@ -23,11 +32,28 @@ type State = {
   preferences: UserPreferences | null;
   /** Manually-entered properties, keyed by id. */
   properties: Record<string, Property>;
+  /** null until the user picks a role in onboarding. */
+  role: Role;
+  realtorProfile: RealtorProfile | null;
+  mlsConnections: MlsConnection[];
+  savedSearches: SavedSearch[];
+  workspaces: Workspace[];
 };
 
 const KEY = "vastu-ready:user-state:v2";
 const MAX_COMPARE = 4;
-const EMPTY: State = { saved: [], feedback: {}, compare: [], preferences: null, properties: {} };
+const EMPTY: State = {
+  saved: [],
+  feedback: {},
+  compare: [],
+  preferences: null,
+  properties: {},
+  role: null,
+  realtorProfile: null,
+  mlsConnections: [],
+  savedSearches: [],
+  workspaces: [],
+};
 /** Floor-plan data URLs above this size aren't persisted (localStorage quota). */
 const MAX_PERSIST_FLOORPLAN = 1_200_000;
 
@@ -67,6 +93,11 @@ function hydrateOnce() {
         compare: Array.isArray(parsed.compare) ? parsed.compare : [],
         preferences: parsed.preferences ?? null,
         properties: parsed.properties && typeof parsed.properties === "object" ? parsed.properties : {},
+        role: parsed.role === "buyer" || parsed.role === "realtor" ? parsed.role : null,
+        realtorProfile: parsed.realtorProfile ?? null,
+        mlsConnections: Array.isArray(parsed.mlsConnections) ? parsed.mlsConnections : [],
+        savedSearches: Array.isArray(parsed.savedSearches) ? parsed.savedSearches : [],
+        workspaces: Array.isArray(parsed.workspaces) ? parsed.workspaces : [],
       };
     }
   } catch {
@@ -147,6 +178,33 @@ const actions = {
       compare: state.compare.filter((x) => x !== id),
     });
   },
+  // --- Role + realtor ---
+  setRole: (role: Role) => setState({ ...state, role }),
+  setRealtorProfile: (realtorProfile: RealtorProfile | null) => setState({ ...state, realtorProfile }),
+  // --- MLS connections (metadata only; no secrets) ---
+  upsertConnection: (c: MlsConnection) =>
+    setState({
+      ...state,
+      mlsConnections: [...state.mlsConnections.filter((x) => x.id !== c.id), c],
+    }),
+  removeConnection: (id: string) =>
+    setState({ ...state, mlsConnections: state.mlsConnections.filter((x) => x.id !== id) }),
+  // --- Saved searches ---
+  upsertSavedSearch: (s: SavedSearch) =>
+    setState({
+      ...state,
+      savedSearches: [...state.savedSearches.filter((x) => x.id !== s.id), s],
+    }),
+  removeSavedSearch: (id: string) =>
+    setState({ ...state, savedSearches: state.savedSearches.filter((x) => x.id !== id) }),
+  // --- Shared workspaces ---
+  upsertWorkspace: (w: Workspace) =>
+    setState({
+      ...state,
+      workspaces: [...state.workspaces.filter((x) => x.id !== w.id), w],
+    }),
+  removeWorkspace: (id: string) =>
+    setState({ ...state, workspaces: state.workspaces.filter((x) => x.id !== id) }),
 };
 
 export type UserState = State & typeof actions & {

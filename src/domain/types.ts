@@ -19,6 +19,7 @@ export type DataSource =
   | "satellite"
   | "inference"
   | "manual"
+  | "demo"
   | "unknown";
 
 /** How much to trust a finding (shown prominently in the UX). */

@@ -22,6 +22,7 @@ import { useUserState } from "@/components/providers/user-state";
 import { formatUsd, formatSqft, formatAcres, formatBaths, formatDriveTime } from "@/lib/format";
 import { DEALBREAKER_LABEL } from "@/domain/profile";
 import { HOME_TYPE_LABEL } from "@/domain/labels";
+import { dataCoverage } from "@/domain/coverage";
 
 export function PropertyReport({
   property: p,
@@ -36,6 +37,7 @@ export function PropertyReport({
   const { removeProperty } = useUserState();
   const ai = recommendationResult({ property: p, analysis: a, prefs });
   const isManual = p.source === "manual";
+  const coverage = dataCoverage(p.vastu);
 
   const facts = [
     { Icon: Bed, label: `${p.beds} beds` },
@@ -147,6 +149,21 @@ export function PropertyReport({
           Overall match is weighted by your priorities and capped by dealbreakers and unmet requirements —
           not a simple average. Expand any Vastu category below to see its evidence and rule.
         </p>
+
+        {/* Data coverage — shown separately from Vastu alignment */}
+        <div className="mt-3 flex flex-col items-center gap-1">
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <span>Data coverage: {coverage.known}/{coverage.total} attributes known ({Math.round(coverage.ratio * 100)}%)</span>
+            {!coverage.sufficient ? <Badge tone="caution">Scores provisional</Badge> : <Badge tone="good">Well-covered</Badge>}
+          </div>
+          {!coverage.sufficient ? (
+            <p className="max-w-md text-center text-[0.7rem] text-muted">
+              Too little verified information to treat these aggregate scores as firm — they&apos;re a
+              provisional read until more is confirmed. Coverage is distinct from alignment: a home can be
+              well-covered and score low, or barely covered and score high on what little is known.
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {/* Main grid */}

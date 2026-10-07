@@ -61,6 +61,7 @@ export const SOURCE_LABEL: Record<DataSource, string> = {
   satellite: "Satellite imagery",
   inference: "AI inference",
   manual: "Manually entered",
+  demo: "Sample data",
   unknown: "Unknown",
 };
 

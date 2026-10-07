@@ -12,15 +12,19 @@ import { DIRECTION_LABEL } from "@/domain/directions";
 import type { Cardinal8, Strictness } from "@/domain/types";
 import { formatUsd } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { useUserState, type Role } from "@/components/providers/user-state";
 
-const STEPS = ["Budget & home", "Location & priorities", "Vastu"] as const;
+const BUYER_STEPS = ["You", "Budget & home", "Location & priorities", "Vastu"] as const;
+const REALTOR_STEPS = ["You", "Connect"] as const;
 const ALL_PRIORITIES = Object.keys(PRIORITY_LABEL) as Priority[];
 const FACINGS: Cardinal8[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 const STRICTNESS: Strictness[] = ["flexible", "balanced", "strict"];
 
 export function OnboardingWizard() {
   const router = useRouter();
+  const { setRole, setPreferences } = useUserState();
   const [step, setStep] = React.useState(0);
+  const [role, setRoleLocal] = React.useState<Role>("buyer");
 
   // Seeded from the demo buyer so the flow is pre-filled and realistic.
   const [budget, setBudget] = React.useState(DEMO_PREFERENCES.profile.maxBudget);
@@ -31,12 +35,29 @@ export function OnboardingWizard() {
   const [facings, setFacings] = React.useState<Cardinal8[]>(DEMO_PREFERENCES.vastu.acceptableFacings);
   const [strictness, setStrictness] = React.useState<Strictness>(DEMO_PREFERENCES.vastu.strictness);
 
+  const STEPS = role === "realtor" ? REALTOR_STEPS : BUYER_STEPS;
+
   const togglePriority = (p: Priority) =>
     setPriorities((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
   const toggleFacing = (f: Cardinal8) =>
     setFacings((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
 
-  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : router.push("/feed"));
+  function finish() {
+    setRole(role);
+    if (role === "realtor") {
+      router.push("/settings");
+      return;
+    }
+    // Persist the buyer's selections so rankings reflect them everywhere.
+    setPreferences({
+      ...DEMO_PREFERENCES,
+      profile: { ...DEMO_PREFERENCES.profile, maxBudget: budget, minBeds, minLotAcres: minLot, maxDriveMinutes: commute, priorities },
+      vastu: { ...DEMO_PREFERENCES.vastu, acceptableFacings: facings, strictness },
+    });
+    router.push("/feed");
+  }
+
+  const next = () => (step < STEPS.length - 1 ? setStep(step + 1) : finish());
   const back = () => setStep(Math.max(0, step - 1));
 
   return (
@@ -66,6 +87,39 @@ export function OnboardingWizard() {
       </ol>
 
       {step === 0 ? (
+        <section className="space-y-6">
+          <h2 className="font-display text-2xl font-semibold text-ink">Who&apos;s using Vastu Ready?</h2>
+          <div className="space-y-2">
+            {([
+              { r: "buyer" as const, title: "I'm a home buyer", desc: "Find a home that matches your needs and Vastu preferences." },
+              { r: "realtor" as const, title: "I'm a realtor", desc: "Connect your MLS, run a hot sheet, and share homes with clients." },
+            ]).map((o) => (
+              <button
+                key={o.r}
+                type="button"
+                onClick={() => setRoleLocal(o.r)}
+                className={cn("w-full rounded-lg border p-4 text-left transition-colors", role === o.r ? "border-forest bg-sage-soft" : "border-line bg-surface hover:bg-surface-2")}
+              >
+                <span className="font-medium text-ink">{o.title}</span>
+                <span className="mt-0.5 block text-sm text-ink-2">{o.desc}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {step === 1 && role === "realtor" ? (
+        <section className="space-y-4">
+          <h2 className="font-display text-2xl font-semibold text-ink">Connect your MLS next</h2>
+          <p className="text-ink-2">
+            We&apos;ll take you to Settings to add your realtor profile and connect your MLS. Listing access
+            requires MLS approval and a signed data agreement — your license number alone doesn&apos;t unlock
+            listings. Until a real connection exists, you&apos;ll see clearly-labeled demo inventory.
+          </p>
+        </section>
+      ) : null}
+
+      {step === 1 && role === "buyer" ? (
         <section className="space-y-6">
           <h2 className="font-display text-2xl font-semibold text-ink">What are you looking for?</h2>
           <Field label="Maximum budget" value={formatUsd(budget)}>
@@ -103,7 +157,7 @@ export function OnboardingWizard() {
         </section>
       ) : null}
 
-      {step === 1 ? (
+      {step === 2 && role === "buyer" ? (
         <section className="space-y-6">
           <h2 className="font-display text-2xl font-semibold text-ink">Location &amp; what matters</h2>
           <Field label="Max commute" value={`${commute} min`}>
@@ -131,7 +185,7 @@ export function OnboardingWizard() {
         </section>
       ) : null}
 
-      {step === 2 ? (
+      {step === 3 && role === "buyer" ? (
         <section className="space-y-6">
           <h2 className="font-display text-2xl font-semibold text-ink">Vastu preferences</h2>
           <div>
@@ -174,11 +228,11 @@ export function OnboardingWizard() {
           Back
         </Button>
         <Button size="md" onClick={next}>
-          {step === STEPS.length - 1 ? "See my matches" : "Continue"}
+          {step === STEPS.length - 1 ? (role === "realtor" ? "Go to Settings" : "See my matches") : "Continue"}
         </Button>
       </div>
       <p className="mt-4 text-center text-xs text-muted">
-        Your selections personalize the demo feed. In production they&apos;re saved to your profile.
+        Your selections are saved to your profile and personalize your rankings everywhere.
       </p>
     </div>
   );

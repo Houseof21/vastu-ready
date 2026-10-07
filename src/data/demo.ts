@@ -1,6 +1,6 @@
 import type { Comp, Property } from "@/domain/property";
 import type { UserPreferences } from "@/domain/profile";
-import type { DataSource, VastuAttribute, Zone } from "@/domain/types";
+import type { DataSource, VastuAttribute, PropertyVastu, Zone } from "@/domain/types";
 
 /** Compact constructor for a provenance-wrapped attribute. */
 function attr<T>(value: T | null, confidence: number, source: DataSource): VastuAttribute<T> {
@@ -470,34 +470,65 @@ function hashId(s: string): number {
 
 const COMP_STREETS = ["Wheatley Ct", "Lindholm Dr", "Caraway Ln", "Pembroke Way", "Saddle Creek Rd", "Verano Pl"];
 
+/**
+ * Anchor for sample comp sale dates. Must stay at/before DEMO_ANALYZED_AT
+ * (2026-01-01) so every generated comp is a *past* closed sale relative to the
+ * demo analysis date. (Kept as a local constant to avoid a demo ⇄ demo-analysis
+ * import cycle.)
+ */
+const DEMO_COMP_ASOF = Date.UTC(2026, 0, 1); // 2026-01-01
+
+/** Unsigned deterministic 0..1 from the seed (>>> keeps it nonnegative). */
+function unit01(seed: number, shift: number): number {
+  return ((seed >>> shift) % 1000) / 1000;
+}
+
 function makeComps(p: Property): Comp[] {
-  const seed = hashId(p.id);
+  const seed = hashId(p.id); // unsigned 32-bit
   const basePsf = p.estimatedValue / p.sqft;
-  // Three comps straddling the estimate: one under, one near, one over.
+  // Three fictional sample comps straddling the estimate: one under, near, over.
   const deltas = [-0.06, 0.01, 0.07];
   return deltas.map((d, i) => {
-    const r = ((seed >> (i * 5)) % 1000) / 1000; // deterministic 0..1
-    const sqft = Math.round(p.sqft * (0.9 + r * 0.2));
+    const r = unit01(seed, i * 5); // deterministic 0..1, always nonnegative
+    const sqft = Math.max(500, Math.round(p.sqft * (0.9 + r * 0.2)));
     const psf = basePsf * (1 + d) * (0.98 + r * 0.04);
-    const soldPrice = Math.round((psf * sqft) / 1000) * 1000;
-    const monthsAgo = 2 + ((seed >> (i * 3)) % 7);
-    const dt = new Date(Date.UTC(2026, 9, 1));
+    const soldPrice = Math.max(1000, Math.round((psf * sqft) / 1000) * 1000);
+    // 1..10 whole months BEFORE the analysis date → always a past closed sale.
+    const monthsAgo = 1 + ((seed >>> (i * 3)) % 10);
+    const dt = new Date(DEMO_COMP_ASOF);
     dt.setUTCMonth(dt.getUTCMonth() - monthsAgo);
+    const streetNum = 100 + ((seed >>> i) % 800); // 100..899, always positive
+    const bedOff = ((seed >>> (i * 2)) % 3) - 1; // -1..+1
+    const bathOff = (((seed >>> (i * 4)) % 3) - 1) * 0.5; // -0.5..+0.5
     return {
-      address: `${100 + ((seed >> i) % 800)} ${COMP_STREETS[(seed + i) % COMP_STREETS.length]}`,
+      address: `${streetNum} ${COMP_STREETS[(seed + i) % COMP_STREETS.length]}`,
       soldPrice,
       soldDate: dt.toISOString().slice(0, 10),
       sqft,
-      beds: Math.max(3, p.beds + ((i + (seed % 3)) % 3) - 1),
-      baths: Math.max(2, Math.round(p.baths) + (i % 2) - 0.5 + 0.5),
-      lotAcres: Math.max(0.2, +(p.lotAcres * (0.8 + r * 0.5)).toFixed(2)),
-      distanceMiles: +(0.3 + r * 1.4).toFixed(1),
+      beds: Math.max(2, p.beds + bedOff),
+      baths: Math.max(1, Math.round((p.baths + bathOff) * 2) / 2),
+      lotAcres: Math.max(0.05, +(p.lotAcres * (0.8 + r * 0.5)).toFixed(2)),
+      distanceMiles: +(0.3 + r * 1.4).toFixed(1), // 0.3..1.7, always positive
     };
+  });
+}
+
+/**
+ * These homes are fictional, so their Vastu evidence is SAMPLE data — not a real
+ * MLS/floor-plan/satellite source. Relabel every known attribute's source to
+ * "demo" so the report says "Sample data" and never implies a real MLS supplied
+ * it (values/confidence are preserved; verification caps at "Likely").
+ */
+function relabelAsDemoEvidence(v: PropertyVastu): void {
+  (Object.keys(v) as (keyof PropertyVastu)[]).forEach((k) => {
+    const a = v[k] as VastuAttribute<unknown>;
+    if (a.value != null && a.source !== "unknown") a.source = "demo";
   });
 }
 
 for (const p of DEMO_PROPERTIES) {
   p.comps = makeComps(p);
+  relabelAsDemoEvidence(p.vastu);
 }
 
 export function getDemoProperty(id: string): Property | undefined {
