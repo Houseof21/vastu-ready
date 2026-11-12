@@ -51,11 +51,12 @@ export function GisDerivedBanner({ className = "" }: { className?: string }) {
     >
       <Info size={16} className="mt-0.5 shrink-0 text-info" aria-hidden />
       <p>
-        <span className="font-semibold text-ink">From county records.</span> Lot size, heated area, year
-        built, and assessed value come from the county assessor; the orientation is{" "}
+        <span className="font-semibold text-ink">From public GIS.</span> Where county coverage exists, lot
+        size, heated area, year built, and assessed value come from county records; otherwise only the
+        footprint-derived facing is available. The orientation is{" "}
         <span className="font-medium text-ink">estimated from the building footprint</span> and needs your
-        confirmation. Beds, baths, and interior room zones aren&apos;t in county data — add them to complete
-        the report. Assessed value is a disclosed stand-in, not a list price or appraisal.
+        confirmation. Beds, baths, and interior room zones aren&apos;t in these sources — add them to complete
+        the report. Any assessed value shown is a disclosed stand-in, not a list price or appraisal.
       </p>
     </div>
   );

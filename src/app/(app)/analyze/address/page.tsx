@@ -10,7 +10,7 @@ import { useUserState } from "@/components/providers/user-state";
 import { gisResultToProperty } from "@/providers/gis/to-property";
 import type { GisOrientationResult } from "@/providers/gis/orientation-from-gis";
 
-const EXAMPLES = ["2515 Sanderson Dr, Raleigh, NC 27608", "2528 Wake Dr, Raleigh, NC 27608"];
+const EXAMPLES = ["2515 Sanderson Dr, Raleigh, NC 27608", "1203 N Mangum St, Durham, NC 27701"];
 
 export default function AnalyzeByAddressPage() {
   const router = useRouter();
@@ -53,9 +53,9 @@ export default function AnalyzeByAddressPage() {
         <Eyebrow>Analyze by address</Eyebrow>
         <h1 className="mt-2 font-display text-3xl font-semibold text-ink">Look up a home&apos;s orientation</h1>
         <p className="mt-2 text-ink-2">
-          Enter a Wake County (Raleigh-area) address. We pull the building footprint, parcel, and streets from
-          county GIS and derive the home&apos;s exterior orientation — then you confirm the entrance. No listing
-          feed carries this; nothing about the home is fabricated.
+          Enter any US address. In Wake County we pull the full parcel, footprint, and streets (facing, lot,
+          road, open-space); elsewhere we derive the facing from the national building footprint alone (lower
+          fidelity). Either way you confirm the entrance — no listing feed carries this, and nothing is fabricated.
         </p>
 
         <Card className="mt-6">
@@ -92,8 +92,8 @@ export default function AnalyzeByAddressPage() {
         </Card>
 
         <p className="mt-4 text-xs text-muted">
-          Proof of concept covers Wake County. The report will show real lot/size/year/assessed-value facts and
-          an orientation estimate you can confirm; beds, baths, and interior rooms stay unknown until you add them.
+          Full county facts (lot/size/year/assessed value) are available in Wake County today; other areas return
+          footprint-derived facing only. Either way, beds, baths, and interior rooms stay unknown until you add them.
         </p>
       </div>
     </Container>

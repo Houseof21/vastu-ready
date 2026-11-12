@@ -1,5 +1,6 @@
 import type { MlsListingProvider, MlsContext, MlsTestResult, MlsPullResult } from "./types";
 import { getCredentials } from "./secure-config";
+import { resoBatchToEvents, type ResoProperty } from "./reso";
 
 /**
  * CoreLogic Trestle adapter — RESO Web API 1.0.3 (OData), server-to-server
@@ -112,8 +113,13 @@ export const TrestleProvider: MlsListingProvider = {
     // MLS grant is real.
     try {
       const since = sinceCheckpoint ? new Date(sinceCheckpoint).toISOString() : "1970-01-01T00:00:00Z";
+      const select =
+        "ListingKey,ListingId,UnparsedAddress,StreetNumber,StreetDirPrefix,StreetName,StreetSuffix," +
+        "City,StateOrProvince,PostalCode,ListPrice,BedroomsTotal,BathroomsTotalInteger,LivingArea," +
+        "LotSizeAcres,YearBuilt,StandardStatus,PublicRemarks,PrivateRemarks,ShowingInstructions," +
+        "ModificationTimestamp,Latitude,Longitude";
       const url =
-        `${tok.apiBase}/Property?$top=50&$orderby=ModificationTimestamp asc` +
+        `${tok.apiBase}/Property?$top=50&$orderby=ModificationTimestamp asc&$select=${select}` +
         `&$filter=ModificationTimestamp gt ${since} and StandardStatus eq 'Active'`;
       const res = await withTimeout((signal) =>
         fetch(url, { signal, headers: { Authorization: `Bearer ${tok.token}`, Accept: "application/json" } }),
@@ -121,9 +127,16 @@ export const TrestleProvider: MlsListingProvider = {
       if (!res.ok) {
         return { live: false, events: [], checkpoint: sinceCheckpoint, message: `Feed query failed (HTTP ${res.status})` };
       }
-      // Mapping RESO Property → HotSheetEvent is intentionally omitted until a real
-      // feed and its exact field set are available; returning no events is honest.
-      return { live: true, events: [], checkpoint: sinceCheckpoint, message: "Connected; no new events in range." };
+      const body = (await res.json()) as { value?: ResoProperty[] };
+      const records = body.value ?? [];
+      const events = resoBatchToEvents(records, ctx.mlsKey);
+      const maxAt = events.reduce((m, e) => Math.max(m, e.at), sinceCheckpoint ?? 0) || sinceCheckpoint;
+      return {
+        live: true,
+        events,
+        checkpoint: maxAt,
+        message: events.length ? `Synced ${events.length} listing update(s).` : "Connected; no new events in range.",
+      };
     } catch (e) {
       return { live: false, events: [], checkpoint: sinceCheckpoint, message: `Feed error: ${(e as Error).message}` };
     }

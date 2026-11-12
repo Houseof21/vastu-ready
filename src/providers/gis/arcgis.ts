@@ -31,6 +31,11 @@ const STREETS =
   "https://services.arcgis.com/v400IkDOw1ad7Yad/ArcGIS/rest/services/COR_Maintained_Streets/FeatureServer/0/query";
 export const WORLD_IMAGERY_EXPORT =
   "https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export";
+/** National building footprints (FEMA/Oak Ridge USA Structures) — queryable by point. */
+const FEMA_STRUCTURES =
+  "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/USA_Structures_View/FeatureServer/0/query";
+/** Web Mercator — used for the national path (planar, conformal; grid≈true north). */
+export const WEB_MERCATOR_SR = 3857;
 
 const TIMEOUT_MS = 12_000;
 
@@ -234,8 +239,51 @@ export async function streetsNearParcel(parcelRing: Ring, padFt = 180): Promise<
   }));
 }
 
-/** A north-up aerial image URL for a parcel (evidence the user can eyeball). */
-export function aerialUrlForRing(ring: Ring, size = 560): string {
+/** WGS84 lon/lat → Web Mercator (EPSG:3857) meters. */
+export function project4326to3857(lng: number, lat: number): Pt {
+  const x = (lng * 20037508.34) / 180;
+  const y = (Math.log(Math.tan(((90 + lat) * Math.PI) / 360)) / (Math.PI / 180)) * (20037508.34 / 180);
+  return [x, y];
+}
+
+function ringAreaAbs(ring: Ring): number {
+  let s = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x1, y1] = ring[i]!;
+    const [x2, y2] = ring[i + 1]!;
+    s += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(s) / 2;
+}
+
+/**
+ * National fallback: the largest building footprint near a lon/lat point, from
+ * FEMA/Oak Ridge USA Structures, returned in Web Mercator meters (EPSG:3857).
+ * No parcels or county streets — used to derive facing anywhere in the US.
+ */
+export async function footprintNearPoint(lng: number, lat: number): Promise<{ ring: Ring; areaSqM: number } | null> {
+  const j = await getJson<{ features?: EsriFeature[] }>(FEMA_STRUCTURES, {
+    geometry: `${lng},${lat}`,
+    geometryType: "esriGeometryPoint",
+    inSR: "4326",
+    distance: "45",
+    units: "esriSRUnit_Meter",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "BUILD_ID",
+    returnGeometry: "true",
+    outSR: String(WEB_MERCATOR_SR),
+    f: "json",
+  });
+  const feats = j?.features ?? [];
+  if (!feats.length) return null;
+  const rings = feats.map((f) => toRing(f.geometry?.rings)).filter((r) => r.length >= 3);
+  if (!rings.length) return null;
+  rings.sort((a, b) => ringAreaAbs(b) - ringAreaAbs(a));
+  return { ring: rings[0]!, areaSqM: Math.round(ringAreaAbs(rings[0]!)) };
+}
+
+/** A north-up aerial image URL for a ring. `sr` is the ring's spatial reference. */
+export function aerialUrlForRing(ring: Ring, size = 560, sr = WAKE_SR): string {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -253,8 +301,8 @@ export function aerialUrlForRing(ring: Ring, size = 560): string {
   const bbox = `${cx - half},${cy - half},${cx + half},${cy + half}`;
   const qs = new URLSearchParams({
     bbox,
-    bboxSR: String(WAKE_SR),
-    imageSR: String(WAKE_SR),
+    bboxSR: String(sr),
+    imageSR: String(sr),
     size: `${size},${size}`,
     format: "png",
     f: "image",

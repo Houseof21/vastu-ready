@@ -22,6 +22,10 @@ import {
   footprintForParcel,
   streetsNearParcel,
   aerialUrlForRing,
+  footprintNearPoint,
+  project4326to3857,
+  WEB_MERCATOR_SR,
+  type GeocodeResult,
 } from "./arcgis";
 
 /**
@@ -68,6 +72,8 @@ export type GisOrientationResult = {
   orientation?: StoredOrientation;
   vastuExterior?: Pick<PropertyVastu, "facingDirection" | "lotShape" | "roadPosition" | "openSpaceNE">;
   aerialUrl?: string;
+  /** Which data tier produced this: full county (Wake) or national footprint-only. */
+  coverage?: "wake" | "national";
 };
 
 const sat = <T>(value: T | null, confidence: number): VastuAttribute<T> => ({
@@ -88,14 +94,9 @@ export async function deriveOrientationFromAddress(address: string): Promise<Gis
   }
   const parcel = await parcelAtPoint(geo.lng, geo.lat);
   if (!parcel || parcel.ring.length < 3) {
-    return {
-      ok: false,
-      stage: "parcel",
-      message:
-        "No Wake County parcel found at that location. This proof of concept covers Wake County (Raleigh and nearby) only.",
-      matchedAddress: geo.matchedAddress,
-      coords: { lng: geo.lng, lat: geo.lat },
-    };
+    // Outside the full-fidelity county coverage — fall back to the national
+    // footprint-only path (facing from the building footprint + geocode point).
+    return deriveNationalOrientation(geo);
   }
   // Footprint and streets both depend only on the parcel — fetch in parallel.
   const [footprint, streets] = await Promise.all([
@@ -232,6 +233,106 @@ export async function deriveOrientationFromAddress(address: string): Promise<Gis
     orientation,
     vastuExterior,
     aerialUrl: aerialUrlForRing(parcel.ring),
+    coverage: "wake",
+  };
+}
+
+/**
+ * National fallback: derive facing from the FEMA/USA-Structures footprint and the
+ * street-interpolated geocode point (no parcels or county streets). Lower
+ * fidelity — lot shape, road position, and open-space stay unknown, and the
+ * uncertainty is wider — but it works anywhere in the US. Still an estimate to
+ * confirm; nothing is fabricated.
+ */
+async function deriveNationalOrientation(geo: GeocodeResult): Promise<GisOrientationResult> {
+  const fp = await footprintNearPoint(geo.lng, geo.lat);
+  if (!fp || fp.ring.length < 3) {
+    return {
+      ok: false,
+      stage: "footprint",
+      message:
+        "No building footprint found near that address in the national dataset. Try a more specific address, or add county coverage for this area.",
+      matchedAddress: geo.matchedAddress,
+      coords: { lng: geo.lng, lat: geo.lat },
+    };
+  }
+  const centroid = ringCentroid(fp.ring);
+  const pt = project4326to3857(geo.lng, geo.lat); // same CRS as the footprint (3857)
+  const towardStreet = mapBearing(pt[0] - centroid[0], pt[1] - centroid[1]);
+  const frontage = frontageFromStreet(fp.ring, towardStreet);
+
+  // The geocode-point proxy is noisier than a road centerline → wider uncertainty.
+  const uncertaintyDeg = 20 + Math.min(35, frontage.snapDeg);
+  const needs: NeedsConfirmationReason[] = ["no_entrance"];
+  if (frontage.snapDeg > 30) needs.push("footprint_unaligned");
+  if (isNearSectorBoundary(frontage.bearingDeg, uncertaintyDeg)) needs.push("near_sector_boundary");
+
+  const sqft = Math.round(fp.areaSqM * 10.7639);
+  const orientation: StoredOrientation = {
+    entranceFacing: {
+      ...emptyEstimate(),
+      bearingDeg: frontage.bearingDeg,
+      cardinal: frontage.cardinal,
+      northType: "true", // Web Mercator grid ≈ true north along meridians
+      uncertaintyDeg,
+      confirmed: false,
+      source: "gis",
+    },
+    entranceLocationZone: null,
+    buildingFrontage: frontage.cardinal,
+    streetDirection: null,
+    northType: "true",
+    planNorthDeg: 0,
+    needsConfirmation: Array.from(new Set(needs)),
+    evidence: [
+      {
+        id: "gis-footprint",
+        kind: "property_map",
+        name: "National building footprint (USA Structures)",
+        dataUrl: aerialUrlForRing(fp.ring, 560, WEB_MERCATOR_SR),
+        footprint: "actual",
+        note: "Street-facing façade derived from the footprint vs. the geocoded street location.",
+      },
+    ],
+    activity: [
+      { at: Date.now(), by: "system", action: "Derived facing from the national building footprint (no parcel/streets)" },
+    ],
+  };
+
+  const derived: GisDerived = {
+    facing: frontage.cardinal,
+    facingBearingDeg: Math.round(frontage.bearingDeg),
+    frontage: frontage.cardinal,
+    streetName: null,
+    streetHeadingDeg: null,
+    lotShape: "regular", // unknown at this tier; placeholder not scored (vastuExterior omits it)
+    roadPosition: "mid_block",
+    openSpace: {} as Record<Cardinal8, number>,
+    openSpaceNE: "moderate",
+    snapDeg: Math.round(frontage.snapDeg),
+    elongation: Math.round(frontage.elongation * 100) / 100,
+    streetDistanceFt: -1,
+    footprintAreaSqFt: sqft,
+  };
+
+  return {
+    ok: true,
+    stage: "complete",
+    message:
+      "Facing derived from the national building footprint (lower fidelity — lot, road, and open-space aren't available outside full county coverage). Confirm the entrance per home.",
+    matchedAddress: geo.matchedAddress,
+    coords: { lng: geo.lng, lat: geo.lat },
+    // Only facing is known at the national tier; everything else stays unknown.
+    vastuExterior: {
+      facingDirection: sat<Cardinal8>(frontage.cardinal, 0.5),
+      lotShape: { value: null, confidence: 0, source: "unknown" },
+      roadPosition: { value: null, confidence: 0, source: "unknown" },
+      openSpaceNE: { value: null, confidence: 0, source: "unknown" },
+    },
+    orientation,
+    derived,
+    aerialUrl: aerialUrlForRing(fp.ring, 560, WEB_MERCATOR_SR),
+    coverage: "national",
   };
 }
 

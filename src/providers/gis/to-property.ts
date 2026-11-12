@@ -30,9 +30,19 @@ function none<T>(): VastuAttribute<T> {
 }
 
 export function gisResultToProperty(r: GisOrientationResult, id?: string): Property | null {
-  if (!r.ok || !r.vastuExterior || !r.parcel) return null;
+  if (!r.ok || !r.vastuExterior) return null;
   const ext = r.vastuExterior;
-  const p = r.parcel;
+  // National (footprint-only) results have no parcel — facts stay unknown.
+  const p = r.parcel ?? {
+    siteAddress: null,
+    city: null,
+    zip: null,
+    deedAcres: null,
+    yearBuilt: null,
+    heatedAreaSqft: null,
+    assessedValue: null,
+    typeUse: null,
+  };
 
   const vastu: PropertyVastu = {
     facingDirection: ext.facingDirection,
