@@ -18,6 +18,7 @@ import { SaveButton, CompareButton } from "./actions";
 import { PropertyImage } from "./property-image";
 import { FictionalBanner, ManualEntryBanner, RealListingBanner, GisDerivedBanner } from "./disclosure-banner";
 import { OrientationConfirm } from "@/components/orientation/orientation-confirm";
+import { InteriorRoomsCard } from "@/components/orientation/interior-rooms-card";
 import { useUserState } from "@/components/providers/user-state";
 import { formatUsd, formatSqft, formatAcres, formatBaths, formatDriveTime } from "@/lib/format";
 import { DEALBREAKER_LABEL } from "@/domain/profile";
@@ -237,6 +238,14 @@ export function PropertyReport({
             <Card>
               <CardBody>
                 <OrientationConfirm property={p} />
+              </CardBody>
+            </Card>
+          ) : null}
+
+          {!p.isDemo ? (
+            <Card>
+              <CardBody>
+                <InteriorRoomsCard property={p} />
               </CardBody>
             </Card>
           ) : null}
