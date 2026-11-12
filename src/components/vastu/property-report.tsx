@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bed, Bath, Ruler, Trees, Car, Calendar, Home, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Bed, Bath, Ruler, Trees, Car, Calendar, Home, Pencil, Trash2, AlertTriangle, Compass } from "lucide-react";
 import type { Property } from "@/domain/property";
 import type { PropertyAnalysis } from "@/domain/scoring";
 import type { UserPreferences } from "@/domain/profile";
@@ -24,6 +24,7 @@ import { formatUsd, formatSqft, formatAcres, formatBaths, formatDriveTime } from
 import { DEALBREAKER_LABEL } from "@/domain/profile";
 import { HOME_TYPE_LABEL } from "@/domain/labels";
 import { dataCoverage } from "@/domain/coverage";
+import { DIRECTION_LABEL } from "@/domain/directions";
 
 export function PropertyReport({
   property: p,
@@ -38,14 +39,20 @@ export function PropertyReport({
   const { removeProperty } = useUserState();
   const ai = recommendationResult({ property: p, analysis: a, prefs });
   const isManual = p.source === "manual";
+  // GIS/address homes are stored like manual entries and can be edited to add
+  // the facts county data doesn't carry (beds, baths, lot).
+  const editable = isManual || p.source === "gis";
   const coverage = dataCoverage(p.vastu);
 
+  // Unknown facts (common for GIS/address lookups) read "Unknown", never "0".
+  const facing = p.vastu.facingDirection.value;
   const facts = [
-    { Icon: Bed, label: `${p.beds} beds` },
-    { Icon: Bath, label: `${formatBaths(p.baths)} baths` },
-    { Icon: Ruler, label: formatSqft(p.sqft) },
-    { Icon: Trees, label: `${formatAcres(p.lotAcres)} lot` },
-    { Icon: Car, label: formatDriveTime(p.driveMinutes) },
+    { Icon: Compass, label: facing ? `Faces ${DIRECTION_LABEL[facing]}` : "Facing to confirm" },
+    { Icon: Bed, label: p.beds > 0 ? `${p.beds} beds` : "Beds unknown" },
+    { Icon: Bath, label: p.baths > 0 ? `${formatBaths(p.baths)} baths` : "Baths unknown" },
+    { Icon: Ruler, label: p.sqft > 0 ? formatSqft(p.sqft) : "Size unknown" },
+    { Icon: Trees, label: p.lotAcres > 0 ? `${formatAcres(p.lotAcres)} lot` : "Lot unknown" },
+    { Icon: Car, label: p.driveMinutes != null ? formatDriveTime(p.driveMinutes) : "Commute unknown" },
     { Icon: Calendar, label: p.yearBuilt ? `Built ${p.yearBuilt}` : "Year unknown" },
     { Icon: Home, label: HOME_TYPE_LABEL[p.homeType] },
   ];
@@ -92,13 +99,13 @@ export function PropertyReport({
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <SaveButton propertyId={p.id} />
             <CompareButton propertyId={p.id} />
-            {isManual ? (
+            {editable ? (
               <>
                 <Link
                   href={`/analyze/manual?id=${encodeURIComponent(p.id)}`}
                   className="inline-flex items-center gap-1.5 rounded-pill border border-line bg-surface px-3.5 py-1.5 text-sm font-medium text-ink-2 hover:bg-surface-2"
                 >
-                  <Pencil size={14} aria-hidden /> Edit &amp; recalculate
+                  <Pencil size={14} aria-hidden /> {p.source === "gis" ? "Add details & recalculate" : "Edit & recalculate"}
                 </Link>
                 <button
                   type="button"

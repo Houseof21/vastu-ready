@@ -67,19 +67,47 @@ async function getJson<T>(url: string, params: Record<string, string>): Promise<
 
 export type GeocodeResult = { matchedAddress: string; lng: number; lat: number };
 
+async function geocodeCensus(address: string): Promise<GeocodeResult | null> {
+  try {
+    const j = await getJson<{ result?: { addressMatches?: GeoMatch[] } }>(CENSUS_GEOCODE, {
+      address,
+      benchmark: "Public_AR_Current",
+      format: "json",
+    });
+    const m = j?.result?.addressMatches ?? [];
+    if (!m.length) return null;
+    return { matchedAddress: m[0]!.matchedAddress, lng: m[0]!.coordinates.x, lat: m[0]!.coordinates.y };
+  } catch {
+    return null;
+  }
+}
+
+/** OpenStreetMap/Nominatim fallback — broader coverage + often rooftop-precise. */
+async function geocodeNominatim(address: string): Promise<GeocodeResult | null> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const qs = new URLSearchParams({ q: address, format: "json", limit: "1", countrycodes: "us" }).toString();
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${qs}`, {
+      signal: ctrl.signal,
+      // Nominatim requires an identifying User-Agent.
+      headers: { "User-Agent": "VastuReady/1.0 (address orientation lookup)", Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const arr = (await res.json()) as { lat: string; lon: string; display_name: string }[];
+    if (!arr.length) return null;
+    return { matchedAddress: arr[0]!.display_name, lng: Number(arr[0]!.lon), lat: Number(arr[0]!.lat) };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** Geocode an address: US Census first (free, unlimited), Nominatim as fallback. */
 export async function geocode(address: string): Promise<GeocodeResult | null> {
-  const j = await getJson<{ result?: { addressMatches?: GeoMatch[] } }>(CENSUS_GEOCODE, {
-    address,
-    benchmark: "Public_AR_Current",
-    format: "json",
-  });
-  const m = j?.result?.addressMatches ?? [];
-  if (!m.length) return null;
-  return {
-    matchedAddress: m[0]!.matchedAddress,
-    lng: m[0]!.coordinates.x,
-    lat: m[0]!.coordinates.y,
-  };
+  return (await geocodeCensus(address)) ?? (await geocodeNominatim(address));
 }
 
 export type ParcelRecord = {
