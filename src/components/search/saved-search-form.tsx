@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardBody, Eyebrow } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { useUserState } from "@/components/providers/user-state";
-import { emptySavedSearch, NOTIFY_LABEL, type SavedSearch, type NotificationChoice } from "@/domain/search";
+import { emptySavedSearch, NOTIFY_LABEL, type SavedSearch, type NotificationChoice, type FacingMode } from "@/domain/search";
 import { CARDINALS, type Cardinal8 } from "@/domain/types";
 import { PRIORITY_LABEL, type Priority } from "@/domain/profile";
 
@@ -68,6 +68,27 @@ export function SavedSearchForm({ existing, onSaved }: { existing?: SavedSearch;
                 <button key={c} onClick={() => toggleFacing(c)} className={`rounded-pill border px-2.5 py-1 text-xs ${s.hard.acceptableFacings.includes(c) ? "border-forest bg-sage-soft text-forest" : "border-line text-ink-2 hover:bg-surface-2"}`}>{c}</button>
               ))}
             </div>
+            {s.hard.acceptableFacings.length > 0 ? (
+              <div className="mt-3">
+                <span className="text-xs text-muted">Treat facing as</span>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {(["required", "preferred"] as FacingMode[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setS((p) => ({ ...p, facingMode: m }))}
+                      className={`rounded-pill border px-2.5 py-1 text-xs capitalize ${s.facingMode === m ? "border-forest bg-sage-soft text-forest" : "border-line text-ink-2 hover:bg-surface-2"}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-muted">
+                  {s.facingMode === "required"
+                    ? "Only homes facing an accepted direction are shortlisted; off-facing homes are excluded."
+                    : "Off-facing homes still appear, ranked below facing matches."}
+                </p>
+              </div>
+            ) : null}
           </div>
         </CardBody>
       </Card>

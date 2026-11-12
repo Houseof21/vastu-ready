@@ -11,6 +11,14 @@ import type { Property } from "./property";
 
 export type NotificationChoice = "off" | "instant" | "daily";
 
+/**
+ * How a buyer's acceptable facings gate the auto-match shortlist:
+ *  - "required": a home that doesn't face an acceptable direction is excluded.
+ *  - "preferred": off-facing homes still appear, ranked lower.
+ * Only meaningful when `hard.acceptableFacings` is non-empty.
+ */
+export type FacingMode = "required" | "preferred";
+
 export const NOTIFY_LABEL: Record<NotificationChoice, string> = {
   off: "No alerts",
   instant: "Instant alerts",
@@ -40,6 +48,8 @@ export type SavedSearch = {
   hard: HardCriteria;
   flexible: FlexibleCriteria;
   notify: NotificationChoice;
+  /** Whether acceptable facings are a hard requirement or just a preference. */
+  facingMode: FacingMode;
   /** Buyer workspace this search belongs to (client-realtor shared), if any. */
   workspaceId: string | null;
   createdAt: number;
@@ -66,6 +76,7 @@ export function emptySavedSearch(id: string): SavedSearch {
     hard: emptyHard(),
     flexible: { priorities: [], preferredAreas: [], preferredStyles: [] },
     notify: "off",
+    facingMode: "required",
     workspaceId: null,
     createdAt: now,
     updatedAt: now,

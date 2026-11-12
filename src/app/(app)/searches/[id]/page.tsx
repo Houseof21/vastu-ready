@@ -10,7 +10,8 @@ import { PropertyCard } from "@/components/vastu/property-card";
 import { SavedSearchForm } from "@/components/search/saved-search-form";
 import { useUserState, useHydrated } from "@/components/providers/user-state";
 import { useScoredFeed } from "@/lib/use-scored";
-import { matchesHard, describeSearch } from "@/domain/search";
+import { describeSearch } from "@/domain/search";
+import { autoMatch, FACING_FIT_LABEL } from "@/domain/auto-match";
 
 export default function SearchDetailPage() {
   const params = useParams<{ id: string }>();
@@ -25,8 +26,9 @@ export default function SearchDetailPage() {
 
   const matches = React.useMemo(() => {
     if (!s) return [];
-    return feed.filter(({ property }) => matchesHard(s, property, property.vastu.facingDirection.value));
+    return autoMatch(s, feed, { facingMode: s.facingMode });
   }, [s, feed]);
+  const showFacing = Boolean(s && s.hard.acceptableFacings.length > 0);
 
   if (!s) {
     return (
@@ -69,13 +71,29 @@ export default function SearchDetailPage() {
 
       <div className="mt-4 flex items-center gap-2">
         <Badge tone={matches.length ? "good" : "neutral"}>{matches.length} {matches.length === 1 ? "match" : "matches"}</Badge>
-        <span className="text-xs text-muted">Hard requirements are enforced; homes missing any requirement are excluded. Unknown commute/facing can&apos;t satisfy a requirement.</span>
+        <span className="text-xs text-muted">
+          Ranked best-fit first. Hard requirements are enforced; homes missing any are excluded.
+          {showFacing
+            ? s.facingMode === "required"
+              ? " Facing is required — off-facing homes are excluded."
+              : " Facing is a preference — off-facing homes appear, ranked lower."
+            : ""}
+        </span>
       </div>
 
       {matches.length > 0 ? (
         <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {matches.map(({ property, analysis }) => (
-            <PropertyCard key={property.id} property={property} analysis={analysis} />
+          {matches.map(({ property, analysis, facingFit }) => (
+            <div key={property.id}>
+              {showFacing ? (
+                <div className="mb-1.5">
+                  <Badge tone={facingFit === "match" ? "good" : facingFit === "off" ? "caution" : "neutral"}>
+                    {FACING_FIT_LABEL[facingFit]}
+                  </Badge>
+                </div>
+              ) : null}
+              <PropertyCard property={property} analysis={analysis} />
+            </div>
           ))}
         </div>
       ) : (

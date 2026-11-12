@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Container } from "@/components/ui/primitives";
 import { WorkspaceBoard } from "@/components/portal/workspace-board";
+import { ClientAutoMatches } from "@/components/portal/client-auto-matches";
 import { useUserState } from "@/components/providers/user-state";
 
 export default function WorkspacePage() {
@@ -21,7 +22,8 @@ export default function WorkspacePage() {
       <Link href={role === "realtor" ? "/clients" : "/feed"} className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-2 hover:text-forest">
         <ArrowLeft size={15} /> Back
       </Link>
-      <div className="mt-4">
+      <div className="mt-4 space-y-6">
+        <ClientAutoMatches workspaceId={id} actor={actor} />
         <WorkspaceBoard workspaceId={id} actor={actor} />
       </div>
     </Container>
