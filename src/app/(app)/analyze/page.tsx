@@ -16,8 +16,24 @@ export default function AnalyzePage() {
           start.
         </p>
 
-        {/* Direct manual entry — the primary path, no URL required */}
+        {/* Address lookup — derive real orientation from county GIS */}
         <Card className="mt-6">
+          <CardBody className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-display text-lg font-semibold text-ink">Look up by address (Wake County)</h2>
+              <p className="mt-0.5 text-sm text-ink-2">
+                Pull real lot, size, year, and assessed value from county records and derive the home&apos;s
+                orientation from its footprint — then confirm the entrance.
+              </p>
+            </div>
+            <ButtonLink href="/analyze/address" variant="primary" size="md" className="shrink-0">
+              Analyze by address
+            </ButtonLink>
+          </CardBody>
+        </Card>
+
+        {/* Direct manual entry */}
+        <Card className="mt-4">
           <CardBody className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-display text-lg font-semibold text-ink">Enter details manually</h2>
@@ -25,7 +41,7 @@ export default function AnalyzePage() {
                 Address, price, orientation, and room locations — with &ldquo;Unknown&rdquo; allowed anywhere.
               </p>
             </div>
-            <ButtonLink href="/analyze/manual" variant="primary" size="md" className="shrink-0">
+            <ButtonLink href="/analyze/manual" variant="secondary" size="md" className="shrink-0">
               Start manual entry
             </ButtonLink>
           </CardBody>

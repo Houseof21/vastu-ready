@@ -42,6 +42,25 @@ export function RealListingBanner({ className = "" }: { className?: string }) {
   );
 }
 
+/** Shown on reports built from county GIS records (address lookup). */
+export function GisDerivedBanner({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`flex items-start gap-2.5 rounded-lg border border-[color:var(--color-info-soft)] bg-info-soft/60 px-4 py-3 text-sm text-ink-2 ${className}`}
+      role="note"
+    >
+      <Info size={16} className="mt-0.5 shrink-0 text-info" aria-hidden />
+      <p>
+        <span className="font-semibold text-ink">From county records.</span> Lot size, heated area, year
+        built, and assessed value come from the county assessor; the orientation is{" "}
+        <span className="font-medium text-ink">estimated from the building footprint</span> and needs your
+        confirmation. Beds, baths, and interior room zones aren&apos;t in county data — add them to complete
+        the report. Assessed value is a disclosed stand-in, not a list price or appraisal.
+      </p>
+    </div>
+  );
+}
+
 /** Shown on reports built from buyer-entered data. */
 export function ManualEntryBanner({ className = "" }: { className?: string }) {
   return (

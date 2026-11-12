@@ -16,8 +16,8 @@ import { CompsTable } from "./comps-table";
 import { FeedbackButtons } from "./feedback-buttons";
 import { SaveButton, CompareButton } from "./actions";
 import { PropertyImage } from "./property-image";
-import { FictionalBanner, ManualEntryBanner, RealListingBanner } from "./disclosure-banner";
-import { OrientationSummary } from "@/components/orientation/orientation-summary";
+import { FictionalBanner, ManualEntryBanner, RealListingBanner, GisDerivedBanner } from "./disclosure-banner";
+import { OrientationConfirm } from "@/components/orientation/orientation-confirm";
 import { useUserState } from "@/components/providers/user-state";
 import { formatUsd, formatSqft, formatAcres, formatBaths, formatDriveTime } from "@/lib/format";
 import { DEALBREAKER_LABEL } from "@/domain/profile";
@@ -58,6 +58,7 @@ export function PropertyReport({
     <div className="space-y-8">
       {p.isDemo ? <FictionalBanner /> : null}
       {p.source === "rentcast" ? <RealListingBanner /> : null}
+      {p.source === "gis" ? <GisDerivedBanner /> : null}
       {isManual ? <ManualEntryBanner /> : null}
 
       {/* Hero */}
@@ -235,7 +236,7 @@ export function PropertyReport({
           {p.orientation ? (
             <Card>
               <CardBody>
-                <OrientationSummary orientation={p.orientation} />
+                <OrientationConfirm property={p} />
               </CardBody>
             </Card>
           ) : null}

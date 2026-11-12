@@ -34,24 +34,53 @@ export type OrientationResult = {
 
 type Pt = { x: number; y: number }; // fractions 0..1 of the box
 
+/** Pre-fill the Studio with an existing estimate (e.g. GIS-derived) to confirm. */
+export type OrientationSeed = {
+  /** Outward (inside→outside) bearing to pre-point the arrow at. */
+  outwardBearingDeg?: number | null;
+  /** North needle angle on the plan (0 = north up). Default 0. */
+  northScreenAngle?: number;
+  northConfirmed?: boolean;
+  northType?: NorthType;
+  zone?: Zone | null;
+  frontage?: Cardinal8 | null;
+};
+
+const DOOR0: Pt = { x: 0.5, y: 0.62 };
+
+/** Tip position that makes the outward arrow point at `bearing` with north up. */
+function tipForBearing(bearing: number | null | undefined, northScreenAngle: number): Pt {
+  if (bearing == null) return { x: 0.5, y: 0.28 };
+  // Undo plan rotation: screen bearing = compass bearing - planNorth, planNorth = 360 - angle.
+  const screen = normDeg(bearing - normDeg(360 - northScreenAngle));
+  const rad = (screen * Math.PI) / 180;
+  const L = 0.3;
+  return {
+    x: Math.min(1, Math.max(0, DOOR0.x + L * Math.sin(rad))),
+    y: Math.min(1, Math.max(0, DOOR0.y - L * Math.cos(rad))),
+  };
+}
+
 export function OrientationStudio({
   imageUrl,
   onConfirm,
   party = "buyer",
+  seed,
 }: {
   imageUrl?: string | null;
   onConfirm: (r: OrientationResult) => void;
   party?: "buyer" | "realtor";
+  seed?: OrientationSeed;
 }) {
   // North needle angle, clockwise from "up" (0 = north is up on the plan).
-  const [northScreenAngle, setNorthScreenAngle] = React.useState(0);
-  const [northConfirmed, setNorthConfirmed] = React.useState(false);
-  const [northType, setNorthType] = React.useState<NorthType>("unknown");
-  const [door, setDoor] = React.useState<Pt>({ x: 0.5, y: 0.62 });
-  const [tip, setTip] = React.useState<Pt>({ x: 0.5, y: 0.28 });
-  const [entranceSet, setEntranceSet] = React.useState(false);
-  const [zone, setZone] = React.useState<Zone | null>(null);
-  const [frontage, setFrontage] = React.useState<Cardinal8 | null>(null);
+  const [northScreenAngle, setNorthScreenAngle] = React.useState(seed?.northScreenAngle ?? 0);
+  const [northConfirmed, setNorthConfirmed] = React.useState(seed?.northConfirmed ?? false);
+  const [northType, setNorthType] = React.useState<NorthType>(seed?.northType ?? "unknown");
+  const [door, setDoor] = React.useState<Pt>(DOOR0);
+  const [tip, setTip] = React.useState<Pt>(() => tipForBearing(seed?.outwardBearingDeg, seed?.northScreenAngle ?? 0));
+  const [entranceSet, setEntranceSet] = React.useState(seed?.outwardBearingDeg != null);
+  const [zone, setZone] = React.useState<Zone | null>(seed?.zone ?? null);
+  const [frontage, setFrontage] = React.useState<Cardinal8 | null>(seed?.frontage ?? null);
   const [confirmed, setConfirmed] = React.useState(false);
 
   const svgRef = React.useRef<SVGSVGElement>(null);
