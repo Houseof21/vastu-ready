@@ -1,5 +1,6 @@
 import type { Cardinal8, PropertyVastu } from "./types";
 import type { StoredOrientation } from "./orientation";
+import type { MlsCrossRef } from "./listing";
 
 export type HomeType = "single_family" | "townhouse" | "condo" | "new_construction_plan";
 export type GarageType = "side_entry" | "front_entry" | "detached" | "none";
@@ -66,6 +67,18 @@ export type Property = {
   /** Full orientation record (evidence, bearings, activity) — separate from the
    *  coarse vastu.facingDirection/entranceDirection used by the engine. */
   orientation?: StoredOrientation;
+  /**
+   * Provenance recorded when a licensed MLS listing was cross-referenced against
+   * the county/GIS facts (beds/baths filled, sqft/year/lot corroborated or
+   * flagged). Absent until a real feed is connected and a listing matches.
+   */
+  mls?: MlsCrossRef;
+  /**
+   * The listing's floor-plan image URL (licensed MLS Media), used as the
+   * Room-Zone Studio backdrop. Distinct from `floorPlanDataUrl`, which for a GIS
+   * home holds the north-up aerial used to confirm the EXTERIOR entrance.
+   */
+  listingFloorPlanUrl?: string | null;
 };
 
 /** Compact summary for feed cards / comparison rows. */

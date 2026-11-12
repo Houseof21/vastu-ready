@@ -1,5 +1,6 @@
 import type { HotSheetEvent, HotSheetListing, HotSheetChangeType } from "@/domain/hotsheet";
 import { listingKey } from "@/domain/hotsheet";
+import type { ListingFacts } from "@/domain/listing";
 
 /**
  * RESO Web API (Data Dictionary) Property record → hot-sheet listing/event.
@@ -34,7 +35,79 @@ export type ResoProperty = {
   ModificationTimestamp?: string;
   Latitude?: number;
   Longitude?: number;
+  /** Present when the query used $expand=Media. */
+  Media?: ResoMedia[];
 };
+
+/**
+ * RESO Media resource record. Floor plans are carried as Media with
+ * MediaCategory "Floor Plan" (RESO Data Dictionary enum); photos as "Photo".
+ */
+export type ResoMedia = {
+  MediaKey?: string;
+  MediaURL?: string;
+  MediaCategory?: string;
+  Order?: number;
+  ShortDescription?: string;
+  MimeType?: string;
+  /** Some feeds flag the preferred/hero image. */
+  PreferredPhotoYN?: boolean;
+};
+
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+function isFloorPlan(m: ResoMedia): boolean {
+  const cat = (m.MediaCategory ?? "").toLowerCase();
+  const desc = (m.ShortDescription ?? "").toLowerCase();
+  return /floor\s*plan/.test(cat) || /floor\s*plan/.test(desc);
+}
+
+function isPhoto(m: ResoMedia): boolean {
+  const cat = (m.MediaCategory ?? "").toLowerCase();
+  // Default-to-photo when uncategorized but a URL exists; never count floor plans.
+  if (isFloorPlan(m)) return false;
+  return cat === "" || cat.includes("photo") || cat.includes("image");
+}
+
+/**
+ * Map a RESO Property record (optionally with expanded Media) to the normalized
+ * ListingFacts the cross-reference engine consumes. Pure and deterministic.
+ * Returns null without a usable listing key. Never fabricates missing facts —
+ * absent fields stay null.
+ */
+export function resoPropertyToFacts(r: ResoProperty, media: ResoMedia[] = []): ListingFacts | null {
+  const key = r.ListingKey || r.ListingId;
+  if (!key) return null;
+
+  const all = media.length ? media : r.Media ?? [];
+  const floorPlan = all.find(isFloorPlan);
+  const photos = all
+    .filter(isPhoto)
+    .filter((m) => typeof m.MediaURL === "string" && m.MediaURL)
+    .sort((a, b) => (a.Order ?? 0) - (b.Order ?? 0))
+    .map((m) => m.MediaURL as string);
+
+  const lat = num(r.Latitude);
+  const lng = num(r.Longitude);
+  const updated = r.ModificationTimestamp ? Date.parse(r.ModificationTimestamp) : Date.now();
+
+  return {
+    listingKey: key,
+    sourceMls: "", // filled by caller (which MLS this came from)
+    status: r.StandardStatus || "Unknown",
+    listPrice: num(r.ListPrice),
+    beds: num(r.BedroomsTotal),
+    baths: num(r.BathroomsTotalInteger),
+    sqft: num(r.LivingArea),
+    lotAcres: num(r.LotSizeAcres),
+    yearBuilt: num(r.YearBuilt),
+    coords: lat != null && lng != null ? { lat, lng } : null,
+    address: composedAddress(r),
+    floorPlanUrl: floorPlan?.MediaURL ?? null,
+    photoUrls: photos,
+    updatedAt: Number.isNaN(updated) ? Date.now() : updated,
+  };
+}
 
 function composedAddress(r: ResoProperty): string {
   if (r.UnparsedAddress && r.UnparsedAddress.trim()) return r.UnparsedAddress.trim();

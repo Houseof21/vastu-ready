@@ -44,18 +44,39 @@ export function PropertyReport({
   const editable = isManual || p.source === "gis";
   const coverage = dataCoverage(p.vastu);
 
+  // Per-fact provenance tag when a licensed listing was cross-referenced.
+  const mlsFields = p.mls?.fields ?? {};
+  const tagFor = (f: "beds" | "baths" | "sqft" | "yearBuilt" | "lotAcres") => {
+    switch (mlsFields[f]) {
+      case "mls":
+        return { text: "MLS", tone: "mls" as const };
+      case "corroborated":
+        return { text: "✓ MLS", tone: "ok" as const };
+      case "conflict":
+        return { text: "⚠ differs", tone: "warn" as const };
+      default:
+        return null;
+    }
+  };
+
   // Unknown facts (common for GIS/address lookups) read "Unknown", never "0".
   const facing = p.vastu.facingDirection.value;
   const facts = [
-    { Icon: Compass, label: facing ? `Faces ${DIRECTION_LABEL[facing]}` : "Facing to confirm" },
-    { Icon: Bed, label: p.beds > 0 ? `${p.beds} beds` : "Beds unknown" },
-    { Icon: Bath, label: p.baths > 0 ? `${formatBaths(p.baths)} baths` : "Baths unknown" },
-    { Icon: Ruler, label: p.sqft > 0 ? formatSqft(p.sqft) : "Size unknown" },
-    { Icon: Trees, label: p.lotAcres > 0 ? `${formatAcres(p.lotAcres)} lot` : "Lot unknown" },
-    { Icon: Car, label: p.driveMinutes != null ? formatDriveTime(p.driveMinutes) : "Commute unknown" },
-    { Icon: Calendar, label: p.yearBuilt ? `Built ${p.yearBuilt}` : "Year unknown" },
-    { Icon: Home, label: HOME_TYPE_LABEL[p.homeType] },
+    { Icon: Compass, label: facing ? `Faces ${DIRECTION_LABEL[facing]}` : "Facing to confirm", tag: null },
+    { Icon: Bed, label: p.beds > 0 ? `${p.beds} beds` : "Beds unknown", tag: tagFor("beds") },
+    { Icon: Bath, label: p.baths > 0 ? `${formatBaths(p.baths)} baths` : "Baths unknown", tag: tagFor("baths") },
+    { Icon: Ruler, label: p.sqft > 0 ? formatSqft(p.sqft) : "Size unknown", tag: tagFor("sqft") },
+    { Icon: Trees, label: p.lotAcres > 0 ? `${formatAcres(p.lotAcres)} lot` : "Lot unknown", tag: tagFor("lotAcres") },
+    { Icon: Car, label: p.driveMinutes != null ? formatDriveTime(p.driveMinutes) : "Commute unknown", tag: null },
+    { Icon: Calendar, label: p.yearBuilt ? `Built ${p.yearBuilt}` : "Year unknown", tag: tagFor("yearBuilt") },
+    { Icon: Home, label: HOME_TYPE_LABEL[p.homeType], tag: null },
   ];
+  const tagClass = (tone: "mls" | "ok" | "warn") =>
+    tone === "warn"
+      ? "border-[color:var(--color-caution-soft)] bg-caution-soft/50 text-caution"
+      : tone === "ok"
+        ? "border-[color:var(--color-good-soft)] bg-good-soft/40 text-forest"
+        : "border-line bg-surface-2 text-ink-2";
 
   function onDelete() {
     removeProperty(p.id);
@@ -92,9 +113,32 @@ export function PropertyReport({
               {facts.map((f) => (
                 <span key={f.label} className="inline-flex items-center gap-1.5">
                   <f.Icon size={15} aria-hidden /> {f.label}
+                  {f.tag ? (
+                    <span className={`rounded-pill border px-1.5 py-0.5 text-[0.6rem] font-medium leading-none ${tagClass(f.tag.tone)}`}>
+                      {f.tag.text}
+                    </span>
+                  ) : null}
                 </span>
               ))}
             </div>
+            {p.mls ? (
+              <p className="mt-3 text-xs text-muted">
+                Beds, baths{p.mls.floorPlanUrl ? ", and floor plan" : ""} from a licensed{" "}
+                <span className="font-medium text-ink-2">{p.mls.sourceMls.toUpperCase()}</span> listing ({p.mls.status}
+                {p.mls.listedAt ? ` · updated ${new Date(p.mls.listedAt).toLocaleDateString()}` : ""}).
+                {p.mls.coordConfirmed ? " Exact house confirmed from the listing's own location." : ""}
+                {p.mls.discrepancies.length > 0
+                  ? ` County and listing differ on ${p.mls.discrepancies
+                      .map((d) => `${d.field} (${d.deltaPct}%)`)
+                      .join(", ")} — the county record is shown.`
+                  : ""}
+              </p>
+            ) : p.source === "gis" ? (
+              <p className="mt-3 text-xs text-muted">
+                Beds, baths, and floor plan aren&apos;t in public GIS. Connect a licensed MLS feed to auto-fill them
+                when the home is listed, or add them yourself with &ldquo;Add details &amp; recalculate.&rdquo;
+              </p>
+            ) : null}
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <SaveButton propertyId={p.id} />

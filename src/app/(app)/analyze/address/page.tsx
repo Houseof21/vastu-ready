@@ -7,12 +7,30 @@ import { ArrowLeft, MapPin, Loader2, AlertTriangle } from "lucide-react";
 import { Container, Card, CardBody, Eyebrow } from "@/components/ui/primitives";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { useUserState } from "@/components/providers/user-state";
-import { gisResultToProperty } from "@/providers/gis/to-property";
 import type { GisOrientationResult } from "@/providers/gis/orientation-from-gis";
+import type { Property } from "@/domain/property";
+import type { MlsCrossRef } from "@/domain/listing";
+
+type LookupResponse = {
+  ok: boolean;
+  gis: GisOrientationResult;
+  property: Property | null;
+  crossRef: MlsCrossRef | null;
+  listing: { connected: boolean; found: boolean; message: string; candidatesConsidered: number };
+};
 
 const EXAMPLES = ["2515 Sanderson Dr, Raleigh, NC 27608", "1203 N Mangum St, Durham, NC 27701"];
 
 export default function AnalyzeByAddressPage() {
+  // useSearchParams requires a Suspense boundary for static prerendering.
+  return (
+    <React.Suspense fallback={null}>
+      <AddressLookup />
+    </React.Suspense>
+  );
+}
+
+function AddressLookup() {
   const router = useRouter();
   const params = useSearchParams();
   const q = params.get("q") ?? "";
@@ -30,25 +48,20 @@ export default function AnalyzeByAddressPage() {
       setError(null);
       setFailedAddr(null);
       try {
-        const res = await fetch(`/api/gis-orientation?address=${encodeURIComponent(addr)}`);
-        const data = (await res.json()) as GisOrientationResult;
-        if (!data.ok) {
+        const res = await fetch(`/api/property-lookup?address=${encodeURIComponent(addr)}`);
+        const data = (await res.json()) as LookupResponse;
+        if (!data.ok || !data.property) {
+          const stage = data.gis?.stage;
           setError(
-            data.stage === "geocode"
+            stage === "geocode"
               ? "We couldn't find that address in the free public datasets — the spelling may differ, or it may be too new. You can still analyze it by entering the details yourself."
-              : data.message || "Couldn't derive orientation for that address.",
+              : data.gis?.message || "Couldn't derive orientation for that address.",
           );
           setFailedAddr(addr);
           return;
         }
-        const property = gisResultToProperty(data);
-        if (!property) {
-          setError("Couldn't build a property from the data.");
-          setFailedAddr(addr);
-          return;
-        }
-        upsertProperty(property);
-        router.push(`/property/${property.id}`);
+        upsertProperty(data.property);
+        router.push(`/property/${data.property.id}`);
       } catch {
         setError("Request failed. Try again.");
         setFailedAddr(addr);
@@ -127,7 +140,10 @@ export default function AnalyzeByAddressPage() {
 
         <p className="mt-4 text-xs text-muted">
           Full county facts (lot/size/year/assessed value) are available in Wake County today; other areas return
-          footprint-derived facing only. Either way, beds, baths, and interior rooms stay unknown until you add them.
+          footprint-derived facing only. Beds, baths, and the floor plan come from a connected licensed MLS feed when
+          the home has a matching listing — cross-referenced against the county record, with the listing&apos;s own
+          location used to pin the exact house. Without a feed (or for a never-listed home) those stay unknown until you
+          add them by hand. Nothing is scraped or guessed.
         </p>
       </div>
     </Container>

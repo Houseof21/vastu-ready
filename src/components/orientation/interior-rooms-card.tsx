@@ -25,9 +25,13 @@ export function InteriorRoomsCard({ property }: { property: Property }) {
   const party: "buyer" | "realtor" = role === "realtor" ? "realtor" : "buyer";
   const planNorthDeg = property.orientation?.planNorthDeg ?? 0;
   const northConfirmed = property.orientation?.entranceFacing.confirmed ?? false;
-  // A manual entry's floorPlanDataUrl is a real floor plan; a GIS home's is the aerial.
-  const defaultPlan = property.source === "manual" ? property.floorPlanDataUrl ?? null : null;
+  // Prefer a licensed MLS listing's floor plan; else a manual entry's uploaded
+  // plan. A GIS home's floorPlanDataUrl is the aerial (exterior confirm), not a plan.
+  const listingPlan = property.listingFloorPlanUrl ?? null;
+  const manualPlan = property.source === "manual" ? property.floorPlanDataUrl ?? null : null;
+  const defaultPlan = listingPlan ?? manualPlan;
   const planImage = uploaded ?? defaultPlan;
+  const usingListingPlan = !uploaded && listingPlan != null;
 
   const v = property.vastu;
   const known = (
@@ -108,6 +112,12 @@ export function InteriorRoomsCard({ property }: { property: Property }) {
               <Upload size={14} /> Upload a floor plan to map against
               <input type="file" accept="image/*" className="hidden" onChange={onUpload} />
             </label>
+          ) : null}
+          {usingListingPlan ? (
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-muted">
+              <Info size={13} className="mt-0.5 shrink-0" /> Floor plan from the licensed MLS listing. Place rooms on it —
+              or replace it with your own.
+            </p>
           ) : null}
           <div className="mt-3">
             <RoomZoneStudio imageUrl={planImage} planNorthDeg={planNorthDeg} northConfirmed={northConfirmed} onSave={onSave} />

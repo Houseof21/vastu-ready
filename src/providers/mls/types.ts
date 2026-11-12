@@ -1,5 +1,19 @@
 import type { HotSheetEvent } from "@/domain/hotsheet";
 import type { DataScope, ConnectionState } from "@/domain/realtor";
+import type { ListingResolveResult } from "@/domain/listing";
+
+/** A single-address lookup against a licensed feed (for cross-referencing GIS). */
+export type AddressQuery = {
+  raw: string;
+  streetNumber: string | null;
+  streetName: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  /** Geocode anchor used to rank candidates to the exact house. */
+  lat: number | null;
+  lng: number | null;
+};
 
 /**
  * MLS listing-provider seam (server-side only). An adapter NEVER reports a
@@ -36,4 +50,10 @@ export interface MlsListingProvider {
   testConnection(ctx: MlsContext): Promise<MlsTestResult>;
   /** Pull change events after a checkpoint. live:false when not truly connected. */
   pullEvents(ctx: MlsContext, sinceCheckpoint: number | null): Promise<MlsPullResult>;
+  /**
+   * Resolve a single address to a listing's normalized facts (beds/baths/floor
+   * plan) for cross-referencing with GIS. Optional per provider. MUST report
+   * connected:false when no real credentials exist — never a fabricated match.
+   */
+  resolveByAddress?(ctx: MlsContext, query: AddressQuery): Promise<ListingResolveResult>;
 }

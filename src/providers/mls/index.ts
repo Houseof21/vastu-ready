@@ -1,7 +1,10 @@
-import type { MlsListingProvider, MlsContext, MlsTestResult, MlsPullResult } from "./types";
+import type { MlsListingProvider, MlsContext, MlsTestResult, MlsPullResult, AddressQuery } from "./types";
 import { TrestleProvider } from "./trestle";
 import type { HotSheetEvent } from "@/domain/hotsheet";
+import type { ListingResolveResult } from "@/domain/listing";
 import { DEMO_PROPERTIES } from "@/data/demo";
+
+export type { AddressQuery } from "./types";
 
 export { setCredentials, clearCredentials, hasCredentials, describeConfig } from "./secure-config";
 export type { MlsCreds } from "./secure-config";
@@ -26,6 +29,29 @@ const NotConfiguredProvider: MlsListingProvider = {
 export function getMlsProvider(providerKey: string): MlsListingProvider {
   if (providerKey === "trestle") return TrestleProvider;
   return NotConfiguredProvider;
+}
+
+/**
+ * Resolve a single address to a licensed listing's facts, provider-agnostically.
+ * Honest: when the provider has no resolver or no credentials, reports
+ * connected:false — never a fabricated match.
+ */
+export async function resolveListingByAddress(
+  providerKey: string,
+  ctx: MlsContext,
+  query: AddressQuery,
+): Promise<ListingResolveResult> {
+  const provider = getMlsProvider(providerKey);
+  if (!provider.resolveByAddress) {
+    return {
+      connected: provider.isConfigured(ctx),
+      found: false,
+      facts: null,
+      message: "This MLS provider has no single-address resolver yet.",
+      candidatesConsidered: 0,
+    };
+  }
+  return provider.resolveByAddress(ctx, query);
 }
 
 /**
