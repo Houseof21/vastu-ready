@@ -1,6 +1,7 @@
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { CatalogProvider } from "@/components/providers/catalog";
+import { SupabaseSync } from "@/components/providers/supabase-sync";
 import { DEMO_PROPERTIES } from "@/data/demo";
 import { getPropertyProvider } from "@/providers/property";
 import type { Property } from "@/domain/property";
@@ -30,6 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {children}
         </CatalogProvider>
       </main>
+      <SupabaseSync />
       <SiteFooter />
     </div>
   );

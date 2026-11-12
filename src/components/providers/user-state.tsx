@@ -205,6 +205,8 @@ const actions = {
     }),
   removeWorkspace: (id: string) =>
     setState({ ...state, workspaces: state.workspaces.filter((x) => x.id !== id) }),
+  /** Replace the provided fields with remotely-loaded state (cross-device sync). */
+  mergeRemote: (partial: Partial<State>) => setState({ ...state, ...partial }),
 };
 
 export type UserState = State & typeof actions & {
