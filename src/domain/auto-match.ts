@@ -67,7 +67,9 @@ export function autoMatch(
     const fit = facingFit(acceptable, facing);
     if (mode === "required" && (fit === "off" || fit === "unknown")) continue;
 
-    let rank = analysis.scores.overall;
+    // A non-finite overall (e.g. a home with too little data to score) ranks last,
+    // never first — guard before any arithmetic or sorting.
+    let rank = Number.isFinite(analysis.scores.overall) ? analysis.scores.overall : 0;
     if (mode === "preferred") {
       if (fit === "off") rank -= OFF_FACING_PENALTY;
       else if (fit === "unknown") rank -= UNKNOWN_FACING_PENALTY;

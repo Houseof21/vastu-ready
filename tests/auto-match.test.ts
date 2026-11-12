@@ -107,6 +107,16 @@ describe("autoMatch — no facing preference", () => {
     expect(r.every((m) => m.facingFit === "any")).toBe(true);
   });
 
+  it("ranks a non-finite overall score last, never first", () => {
+    const s = search({});
+    const r = autoMatch(s, [
+      cand(prop("bad", { facing: "N" }), NaN),
+      cand(prop("good", { facing: "N" }), 70),
+    ]);
+    expect(r.map((m) => m.property.id)).toEqual(["good", "bad"]);
+    expect(r.find((m) => m.property.id === "bad")!.rankScore).toBe(0);
+  });
+
   it("respects the limit", () => {
     const s = search({});
     const many = [1, 2, 3, 4].map((n) => cand(prop(`p${n}`, { facing: "N" }), n * 10));
