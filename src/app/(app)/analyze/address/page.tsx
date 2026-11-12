@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, MapPin, Loader2, AlertTriangle } from "lucide-react";
 import { Container, Card, CardBody, Eyebrow } from "@/components/ui/primitives";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { useUserState } from "@/components/providers/user-state";
 import { gisResultToProperty } from "@/providers/gis/to-property";
 import type { GisOrientationResult } from "@/providers/gis/orientation-from-gis";
@@ -14,35 +14,58 @@ const EXAMPLES = ["2515 Sanderson Dr, Raleigh, NC 27608", "1203 N Mangum St, Dur
 
 export default function AnalyzeByAddressPage() {
   const router = useRouter();
+  const params = useSearchParams();
+  const q = params.get("q") ?? "";
   const { upsertProperty } = useUserState();
-  const [address, setAddress] = React.useState("");
+  const [address, setAddress] = React.useState(q);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [failedAddr, setFailedAddr] = React.useState<string | null>(null);
+  const ranRef = React.useRef(false);
 
-  async function run(addr: string) {
-    if (!addr.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/gis-orientation?address=${encodeURIComponent(addr)}`);
-      const data = (await res.json()) as GisOrientationResult;
-      if (!data.ok) {
-        setError(data.message || "Couldn't derive orientation for that address.");
-        return;
+  const run = React.useCallback(
+    async (addr: string) => {
+      if (!addr.trim()) return;
+      setLoading(true);
+      setError(null);
+      setFailedAddr(null);
+      try {
+        const res = await fetch(`/api/gis-orientation?address=${encodeURIComponent(addr)}`);
+        const data = (await res.json()) as GisOrientationResult;
+        if (!data.ok) {
+          setError(
+            data.stage === "geocode"
+              ? "We couldn't find that address in the free public datasets — the spelling may differ, or it may be too new. You can still analyze it by entering the details yourself."
+              : data.message || "Couldn't derive orientation for that address.",
+          );
+          setFailedAddr(addr);
+          return;
+        }
+        const property = gisResultToProperty(data);
+        if (!property) {
+          setError("Couldn't build a property from the data.");
+          setFailedAddr(addr);
+          return;
+        }
+        upsertProperty(property);
+        router.push(`/property/${property.id}`);
+      } catch {
+        setError("Request failed. Try again.");
+        setFailedAddr(addr);
+      } finally {
+        setLoading(false);
       }
-      const property = gisResultToProperty(data);
-      if (!property) {
-        setError("Couldn't build a property from the county data.");
-        return;
-      }
-      upsertProperty(property);
-      router.push(`/property/${property.id}`);
-    } catch {
-      setError("Request failed. Try again.");
-    } finally {
-      setLoading(false);
+    },
+    [router, upsertProperty],
+  );
+
+  // Auto-run when arriving with ?q= (e.g. from the Analyze box).
+  React.useEffect(() => {
+    if (q && !ranRef.current) {
+      ranRef.current = true;
+      void run(q);
     }
-  }
+  }, [q, run]);
 
   return (
     <Container className="py-8">
@@ -84,9 +107,20 @@ export default function AnalyzeByAddressPage() {
               ))}
             </div>
             {error ? (
-              <p className="mt-3 flex items-start gap-2 text-sm text-caution">
-                <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {error}
-              </p>
+              <div className="mt-3 rounded-lg border border-[color:var(--color-caution-soft)] bg-caution-soft/40 p-3">
+                <p className="flex items-start gap-2 text-sm text-ink-2">
+                  <AlertTriangle size={15} className="mt-0.5 shrink-0 text-caution" /> {error}
+                </p>
+                <div className="mt-2">
+                  <ButtonLink
+                    href={`/analyze/manual${failedAddr ? `?address=${encodeURIComponent(failedAddr)}` : ""}`}
+                    variant="primary"
+                    size="sm"
+                  >
+                    Enter details manually instead
+                  </ButtonLink>
+                </div>
+              </div>
             ) : null}
           </CardBody>
         </Card>

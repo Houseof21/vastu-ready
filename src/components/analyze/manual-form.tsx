@@ -99,15 +99,35 @@ function draftFromProperty(p: Property): Draft {
   };
 }
 
+/** Best-effort split of "Street, City, ST ZIP" so a carried-over address prefills. */
+function parseAddress(s: string): Partial<Draft> {
+  const parts = s.split(",").map((x) => x.trim()).filter(Boolean);
+  const out: Partial<Draft> = { line1: parts[0] ?? s };
+  if (parts[1]) out.city = parts[1];
+  const tail = parts.slice(2).join(" ");
+  const m = tail.match(/([A-Za-z]{2})\s*(\d{5})?/);
+  if (m) {
+    out.state = m[1]!.toUpperCase();
+    if (m[2]) out.zip = m[2];
+  }
+  return out;
+}
+
 export function ManualEntryForm() {
   const hydrated = useHydrated();
   const params = useSearchParams();
   const editId = params.get("id");
+  const addressParam = params.get("address");
   const { properties } = useUserState();
 
   if (!hydrated && editId) return <div className="py-24 text-center text-muted">Loading…</div>;
-  const initial = editId && properties[editId] ? draftFromProperty(properties[editId]) : EMPTY_DRAFT;
-  return <Wizard key={editId ?? "new"} initial={initial} editing={Boolean(editId)} />;
+  const initial =
+    editId && properties[editId]
+      ? draftFromProperty(properties[editId])
+      : addressParam
+        ? { ...EMPTY_DRAFT, ...parseAddress(addressParam) }
+        : EMPTY_DRAFT;
+  return <Wizard key={editId ?? addressParam ?? "new"} initial={initial} editing={Boolean(editId)} />;
 }
 
 function Wizard({ initial, editing }: { initial: Draft; editing: boolean }) {

@@ -290,24 +290,28 @@ function ringAreaAbs(ring: Ring): number {
  * No parcels or county streets — used to derive facing anywhere in the US.
  */
 export async function footprintNearPoint(lng: number, lat: number): Promise<{ ring: Ring; areaSqM: number } | null> {
-  const j = await getJson<{ features?: EsriFeature[] }>(FEMA_STRUCTURES, {
-    geometry: `${lng},${lat}`,
-    geometryType: "esriGeometryPoint",
-    inSR: "4326",
-    distance: "45",
-    units: "esriSRUnit_Meter",
-    spatialRel: "esriSpatialRelIntersects",
-    outFields: "BUILD_ID",
-    returnGeometry: "true",
-    outSR: String(WEB_MERCATOR_SR),
-    f: "json",
-  });
-  const feats = j?.features ?? [];
-  if (!feats.length) return null;
-  const rings = feats.map((f) => toRing(f.geometry?.rings)).filter((r) => r.length >= 3);
-  if (!rings.length) return null;
-  rings.sort((a, b) => ringAreaAbs(b) - ringAreaAbs(a));
-  return { ring: rings[0]!, areaSqM: Math.round(ringAreaAbs(rings[0]!)) };
+  // Geocodes can land in the street or next door, so widen the search in steps
+  // until a footprint is found (keeps the nearest/largest; avoids false hits far away).
+  for (const distance of ["45", "90", "150"]) {
+    const j = await getJson<{ features?: EsriFeature[] }>(FEMA_STRUCTURES, {
+      geometry: `${lng},${lat}`,
+      geometryType: "esriGeometryPoint",
+      inSR: "4326",
+      distance,
+      units: "esriSRUnit_Meter",
+      spatialRel: "esriSpatialRelIntersects",
+      outFields: "BUILD_ID",
+      returnGeometry: "true",
+      outSR: String(WEB_MERCATOR_SR),
+      f: "json",
+    });
+    const rings = (j?.features ?? []).map((f) => toRing(f.geometry?.rings)).filter((r) => r.length >= 3);
+    if (rings.length) {
+      rings.sort((a, b) => ringAreaAbs(b) - ringAreaAbs(a));
+      return { ring: rings[0]!, areaSqM: Math.round(ringAreaAbs(rings[0]!)) };
+    }
+  }
+  return null;
 }
 
 /** A north-up aerial image URL for a ring. `sr` is the ring's spatial reference. */
